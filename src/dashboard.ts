@@ -46,6 +46,11 @@ const HEADER: Record<string, { eyebrow: string; name: string }> = {
   projects: { eyebrow: "In progress", name: "Projects" },
 };
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 function bloomMark(): string {
   return `<svg class="bloom-mark" viewBox="0 0 32 32" role="img" aria-label="Bloom">
     <defs><linearGradient id="bm-bg" x1="0" y1="0" x2="1" y2="1">
@@ -85,7 +90,7 @@ function tasksView(d: BloomData): string {
   const cols = BOARD_COLS.map((c) => {
     const list = d.tasks[c.key as "todo" | "doing" | "done"].map(taskCard).join("");
     const count = d.tasks[c.key as "todo" | "doing" | "done"].length;
-    return `<div class="board-col" style="--tint:${c.tint}">
+    return `<div class="board-col" style="--tint:${c.tint}" data-col="${c.key}">
       <div class="board-col-head">
         <span class="col-dot" style="background:${c.dot}"></span>
         <span class="col-title">${c.title}</span>
@@ -118,7 +123,7 @@ function homeView(d: BloomData): string {
 
   const todayRows = d.todayTasks
     .map(
-      (t) => `<div class="chk-row ${t.done ? "done" : ""}">
+      (t) => `<div class="chk-row ${t.done ? "done" : ""}" data-file="${t.file ?? ""}">
         <span class="chk ${t.done ? "on" : ""}">${t.done ? "✓" : ""}</span>
         <span class="chk-name">${t.name}</span>
       </div>`
@@ -395,6 +400,27 @@ export function buildShell(d: BloomData, _now: Date, initialView = "home"): stri
       </div></div>
     </main>
   </div>`;
+}
+
+/* --------------------------- CALENDAR NAVIGATION ------------------------ */
+/** Re-render the calendar title + grid for an arbitrary month (nav arrows). */
+export function setCalendarMonth(root: HTMLElement, d: BloomData, year: number, monthIndex: number): void {
+  const showToday = year === d.calendar.year && monthIndex === d.calendar.monthIndex;
+  const lead = (new Date(year, monthIndex, 1).getDay() + 6) % 7; // Monday-start blanks
+  const days = new Date(year, monthIndex + 1, 0).getDate();
+  const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  let cells = "";
+  for (let i = 0; i < lead; i++) cells += `<div class="cal-cell empty"></div>`;
+  for (let day = 1; day <= days; day++) {
+    const isToday = showToday && day === d.calendar.today;
+    const ev = showToday ? d.calendar.events.find((e) => e.day === day) : undefined;
+    const cls = ["cal-cell", isToday ? "today" : "", ev ? "event " + ev.kind : ""].filter(Boolean).join(" ");
+    cells += `<div class="${cls}"><span class="cal-day">${day}</span>${isToday ? '<span class="cal-today">Today</span>' : ""}</div>`;
+  }
+  const title = root.querySelector<HTMLElement>(".cal-title");
+  if (title) title.textContent = `${MONTHS[monthIndex]} ${year}`;
+  const grid = root.querySelector<HTMLElement>(".cal-grid");
+  if (grid) grid.innerHTML = dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
 }
 
 /** Switch the active view: toggles sections + nav active state + header text. */

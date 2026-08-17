@@ -405,3 +405,42 @@
 /* ------------------------------- DARK HOVER TWEAKS ----------------------- */
 .bloom.theme-dark .nav-item:hover { background: var(--surface-hover); }
 .bloom.theme-dark .card { border-color: var(--line); }
+
+/* ------------------------------ SETTINGS MODAL --------------------------- */
+/* The modal wraps its content in `.bloom` so the palette tokens above apply. */
+.bloom-settings { display: block; height: auto; overflow: visible; padding: 4px 2px 8px; }
+.bloom-settings .bs-title {
+  margin: 0 0 18px; font-size: 18px; font-weight: 700; color: var(--ink-strong);
+}
+.bloom-settings .bs-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 0; border-top: 1px solid var(--line);
+}
+.bloom-settings .bs-row:first-of-type { border-top: none; }
+.bloom-settings .bs-label { font-size: 14px; font-weight: 500; color: var(--ink); flex: 0 0 auto; }
+
+.bloom-settings .bs-seg { display: flex; gap: 6px; }
+.bloom-settings .bs-seg-btn {
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+  padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.bloom-settings .bs-seg-btn:hover { background: var(--surface-hover); }
+.bloom-settings .bs-seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+.bloom-settings .bs-btn {
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-strong);
+  padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background 0.15s ease;
+}
+.bloom-settings .bs-btn:hover { background: var(--surface-hover); }
+.bloom-settings .bs-btn.bs-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+.bloom-settings .bs-note { font-size: 12px; color: var(--text-muted); margin: 18px 0 8px; }
+.bloom-settings .bs-src { display: flex; flex-wrap: wrap; gap: 6px; }
+.bloom-settings .bs-src-item {
+  font-size: 11px; padding: 4px 9px; border-radius: 8px;
+  background: var(--surface-2); color: var(--text-muted);
+  font-family: "Inter", ui-monospace, monospace;
+}
+.bloom-settings .bs-foot { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 16px; justify-content: flex-end; }

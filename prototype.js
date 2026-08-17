@@ -72,7 +72,7 @@ if you want to view the source, please visit the github repository of this plugi
     const cols = BOARD_COLS.map((c) => {
       const list = d.tasks[c.key].map(taskCard).join("");
       const count = d.tasks[c.key].length;
-      return `<div class="board-col" style="--tint:${c.tint}">
+      return `<div class="board-col" style="--tint:${c.tint}" data-col="${c.key}">
       <div class="board-col-head">
         <span class="col-dot" style="background:${c.dot}"></span>
         <span class="col-title">${c.title}</span>
@@ -102,10 +102,13 @@ if you want to view the source, please visit the github repository of this plugi
       }
     ).join("");
     const todayRows = d.todayTasks.map(
-      (t) => `<div class="chk-row ${t.done ? "done" : ""}">
+      (t) => {
+        var _a;
+        return `<div class="chk-row ${t.done ? "done" : ""}" data-file="${(_a = t.file) != null ? _a : ""}">
         <span class="chk ${t.done ? "on" : ""}">${t.done ? "\u2713" : ""}</span>
         <span class="chk-name">${t.name}</span>
-      </div>`
+      </div>`;
+      }
     ).join("");
     const projRows = d.projects.map(
       (p) => `<div class="proj">
@@ -382,11 +385,11 @@ if you want to view the source, please visit the github repository of this plugi
         { label: "Reading", value: "12", sub: "books read" }
       ],
       todayTasks: [
-        { name: "Cook dinner", done: false },
-        { name: "Clean litter box", done: true },
-        { name: "Water plants", done: false },
-        { name: "Skincare routine", done: true },
-        { name: "Take out trash", done: false }
+        { name: "Cook dinner", done: false, file: "11-Todo/Daily Tasks.md" },
+        { name: "Clean litter box", done: true, file: "11-Todo/Daily Tasks.md" },
+        { name: "Water plants", done: false, file: "11-Todo/Daily Tasks.md" },
+        { name: "Skincare routine", done: true, file: "11-Todo/Daily Tasks.md" },
+        { name: "Take out trash", done: false, file: "11-Todo/Daily Tasks.md" }
       ],
       projects: [
         { name: "Redesign portfolio", progress: 60 },

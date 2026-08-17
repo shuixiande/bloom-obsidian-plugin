@@ -23,6 +23,7 @@ export interface StatItem {
 export interface TodayTask {
   name: string;
   done: boolean;
+  file?: string; // source markdown file, used for checkbox write-back
 }
 
 export interface Project {
@@ -109,11 +110,11 @@ export function loadBloomData(): BloomData {
       { label: "Reading", value: "12", sub: "books read" },
     ],
     todayTasks: [
-      { name: "Cook dinner", done: false },
-      { name: "Clean litter box", done: true },
-      { name: "Water plants", done: false },
-      { name: "Skincare routine", done: true },
-      { name: "Take out trash", done: false },
+      { name: "Cook dinner", done: false, file: "11-Todo/Daily Tasks.md" },
+      { name: "Clean litter box", done: true, file: "11-Todo/Daily Tasks.md" },
+      { name: "Water plants", done: false, file: "11-Todo/Daily Tasks.md" },
+      { name: "Skincare routine", done: true, file: "11-Todo/Daily Tasks.md" },
+      { name: "Take out trash", done: false, file: "11-Todo/Daily Tasks.md" },
     ],
     projects: [
       { name: "Redesign portfolio", progress: 60 },

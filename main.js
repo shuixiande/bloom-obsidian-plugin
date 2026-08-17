@@ -33,7 +33,7 @@ __export(main_exports, {
   default: () => BloomPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 
 // src/dashboard.ts
 var ICONS = {
@@ -72,6 +72,20 @@ var HEADER = {
   books: { eyebrow: "Your shelf", name: "Books" },
   projects: { eyebrow: "In progress", name: "Projects" }
 };
+var MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December"
+];
 function bloomMark() {
   return `<svg class="bloom-mark" viewBox="0 0 32 32" role="img" aria-label="Bloom">
     <defs><linearGradient id="bm-bg" x1="0" y1="0" x2="1" y2="1">
@@ -104,7 +118,7 @@ function tasksView(d) {
   const cols = BOARD_COLS.map((c) => {
     const list = d.tasks[c.key].map(taskCard).join("");
     const count = d.tasks[c.key].length;
-    return `<div class="board-col" style="--tint:${c.tint}">
+    return `<div class="board-col" style="--tint:${c.tint}" data-col="${c.key}">
       <div class="board-col-head">
         <span class="col-dot" style="background:${c.dot}"></span>
         <span class="col-title">${c.title}</span>
@@ -134,10 +148,13 @@ function homeView(d) {
     }
   ).join("");
   const todayRows = d.todayTasks.map(
-    (t) => `<div class="chk-row ${t.done ? "done" : ""}">
+    (t) => {
+      var _a;
+      return `<div class="chk-row ${t.done ? "done" : ""}" data-file="${(_a = t.file) != null ? _a : ""}">
         <span class="chk ${t.done ? "on" : ""}">${t.done ? "\u2713" : ""}</span>
         <span class="chk-name">${t.name}</span>
-      </div>`
+      </div>`;
+    }
   ).join("");
   const projRows = d.projects.map(
     (p) => `<div class="proj">
@@ -383,6 +400,27 @@ function buildShell(d, _now, initialView = "home") {
     </main>
   </div>`;
 }
+function setCalendarMonth(root, d, year, monthIndex) {
+  const showToday = year === d.calendar.year && monthIndex === d.calendar.monthIndex;
+  const lead = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+  const days = new Date(year, monthIndex + 1, 0).getDate();
+  const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  let cells = "";
+  for (let i = 0; i < lead; i++)
+    cells += `<div class="cal-cell empty"></div>`;
+  for (let day = 1; day <= days; day++) {
+    const isToday = showToday && day === d.calendar.today;
+    const ev = showToday ? d.calendar.events.find((e) => e.day === day) : void 0;
+    const cls = ["cal-cell", isToday ? "today" : "", ev ? "event " + ev.kind : ""].filter(Boolean).join(" ");
+    cells += `<div class="${cls}"><span class="cal-day">${day}</span>${isToday ? '<span class="cal-today">Today</span>' : ""}</div>`;
+  }
+  const title = root.querySelector(".cal-title");
+  if (title)
+    title.textContent = `${MONTHS[monthIndex]} ${year}`;
+  const grid = root.querySelector(".cal-grid");
+  if (grid)
+    grid.innerHTML = dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
+}
 function showView(root, id) {
   var _a;
   root.querySelectorAll(".view").forEach((v) => {
@@ -401,7 +439,7 @@ function showView(root, id) {
 }
 
 // src/data.ts
-function loadBloomData2() {
+function loadBloomData() {
   return {
     owner: "Candice",
     logoSub: "vault OS",
@@ -414,11 +452,11 @@ function loadBloomData2() {
       { label: "Reading", value: "12", sub: "books read" }
     ],
     todayTasks: [
-      { name: "Cook dinner", done: false },
-      { name: "Clean litter box", done: true },
-      { name: "Water plants", done: false },
-      { name: "Skincare routine", done: true },
-      { name: "Take out trash", done: false }
+      { name: "Cook dinner", done: false, file: "11-Todo/Daily Tasks.md" },
+      { name: "Clean litter box", done: true, file: "11-Todo/Daily Tasks.md" },
+      { name: "Water plants", done: false, file: "11-Todo/Daily Tasks.md" },
+      { name: "Skincare routine", done: true, file: "11-Todo/Daily Tasks.md" },
+      { name: "Take out trash", done: false, file: "11-Todo/Daily Tasks.md" }
     ],
     projects: [
       { name: "Redesign portfolio", progress: 60 },
@@ -503,7 +541,7 @@ function loadBloomData2() {
 }
 
 // src/vault.ts
-var MONTHS = [
+var MONTHS2 = [
   "January",
   "February",
   "March",
@@ -559,7 +597,7 @@ function fmtShort(iso) {
   const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (!m)
     return iso;
-  return `${MONTHS[parseInt(m[2], 10) - 1].slice(0, 3)} ${parseInt(m[3], 10)}`;
+  return `${MONTHS2[parseInt(m[2], 10) - 1].slice(0, 3)} ${parseInt(m[3], 10)}`;
 }
 function catColor(c) {
   return c === "Daily" ? "#b5627c" : c === "Learning" ? "#4f7a3a" : "#5a6aa0";
@@ -615,7 +653,7 @@ function parseProjects(md) {
 }
 async function loadBloomDataLive(app) {
   var _a;
-  const d = loadBloomData2();
+  const d = loadBloomData();
   const now = /* @__PURE__ */ new Date();
   const read = async (p) => {
     try {
@@ -673,8 +711,8 @@ async function loadBloomDataLive(app) {
         };
       });
       const todayAmt = rows.filter((r) => r.date === fmtISO(now)).reduce((a, b) => a + b.amt, 0);
-      const monthLabel = `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
-      d.expenses = { today: +todayAmt.toFixed(2), monthTag: MONTHS[now.getMonth()].slice(0, 3).toUpperCase(), categories };
+      const monthLabel = `${MONTHS2[now.getMonth()]} ${now.getFullYear()}`;
+      d.expenses = { today: +todayAmt.toFixed(2), monthTag: MONTHS2[now.getMonth()].slice(0, 3).toUpperCase(), categories };
       d.trackers.expense = { total: +total.toFixed(2), month: monthLabel, categories };
       d.trackers.month.expense = `\xA5${total.toFixed(0)}`;
     }
@@ -682,7 +720,7 @@ async function loadBloomDataLive(app) {
   const rawDaily = collectTasks(await read("11-Todo/Daily Tasks.md"), "Daily");
   const rawStudy = collectTasks(await read("11-Todo/Study Tasks.md"), "Learning");
   const rawProj = collectTasks(await read("11-Todo/Project Tasks.md"), "Project");
-  const todayTasks = rawDaily.slice(0, 6).map((t) => ({ name: t.name, done: t.done }));
+  const todayTasks = rawDaily.slice(0, 6).map((t) => ({ name: t.name, done: t.done, file: "11-Todo/Daily Tasks.md" }));
   if (todayTasks.length) {
     const done = todayTasks.filter((t) => t.done).length;
     d.todayTasks = todayTasks;
@@ -712,7 +750,7 @@ async function loadBloomDataLive(app) {
   const year = now.getFullYear();
   const monthIndex = now.getMonth();
   d.calendar = {
-    monthLabel: `${MONTHS[monthIndex]} ${year}`,
+    monthLabel: `${MONTHS2[monthIndex]} ${year}`,
     year,
     monthIndex,
     firstDayJS: new Date(year, monthIndex, 1).getDay(),
@@ -783,19 +821,110 @@ async function loadBloomDataLive(app) {
   return d;
 }
 
+// src/settings.ts
+var import_obsidian = require("obsidian");
+var VIEWS = [
+  { id: "home", label: "Dashboard" },
+  { id: "tasks", label: "Tasks" },
+  { id: "calendar", label: "Calendar" },
+  { id: "trackers", label: "Trackers" }
+];
+var DATA_SOURCES = [
+  "11-Todo/Daily Tasks.md",
+  "11-Todo/Study Tasks.md",
+  "11-Todo/Project Tasks.md",
+  "10-Projects/Project Dashboard.md",
+  "13-Trackers/Weight Tracker.md",
+  "13-Trackers/Period Tracker.md",
+  "13-Trackers/Expense Tracker.md",
+  "12-Calendar/Monthly Calendar.md",
+  "12-Calendar/Daily Notes/<date>.md"
+];
+var BloomSettingsModal = class extends import_obsidian.Modal {
+  constructor(app, plugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    const wrap = contentEl.createDiv({ cls: "bloom bloom-settings" });
+    if (this.plugin.settings.dark)
+      wrap.addClass("theme-dark");
+    const s = this.plugin.settings;
+    wrap.createEl("h3", { text: "Bloom settings", cls: "bs-title" });
+    const vRow = wrap.createDiv({ cls: "bs-row" });
+    vRow.createSpan({ text: "Default view", cls: "bs-label" });
+    const vSeg = vRow.createDiv({ cls: "bs-seg" });
+    VIEWS.forEach((v) => {
+      const b = vSeg.createEl("button", { text: v.label, cls: "bs-seg-btn" });
+      if ((s.defaultView || "home") === v.id)
+        b.addClass("active");
+      b.addEventListener("click", () => {
+        vSeg.querySelectorAll(".bs-seg-btn").forEach((x) => x.removeClass("active"));
+        b.addClass("active");
+        this.plugin.setDefaultView(v.id);
+      });
+    });
+    const tRow = wrap.createDiv({ cls: "bs-row" });
+    tRow.createSpan({ text: "Theme", cls: "bs-label" });
+    const tSeg = tRow.createDiv({ cls: "bs-seg" });
+    [
+      ["light", "Light"],
+      ["dark", "Dark"]
+    ].forEach(([val, lbl]) => {
+      const b = tSeg.createEl("button", { text: lbl, cls: "bs-seg-btn" });
+      if (s.dark === (val === "dark"))
+        b.addClass("active");
+      b.addEventListener("click", () => {
+        tSeg.querySelectorAll(".bs-seg-btn").forEach((x) => x.removeClass("active"));
+        b.addClass("active");
+        this.plugin.applyThemeExternal(val === "dark");
+      });
+    });
+    const dRow = wrap.createDiv({ cls: "bs-row" });
+    dRow.createSpan({ text: "Data", cls: "bs-label" });
+    const refresh = dRow.createEl("button", { text: "\u21BB Refresh from vault", cls: "bs-btn" });
+    refresh.addEventListener("click", () => {
+      this.plugin.reloadView();
+      new import_obsidian.Notice("Bloom: data refreshed");
+    });
+    wrap.createEl("div", { text: "Reads from these vault files:", cls: "bs-note" });
+    const list = wrap.createEl("div", { cls: "bs-src" });
+    DATA_SOURCES.forEach((p) => list.createEl("code", { text: p, cls: "bs-src-item" }));
+    const foot = wrap.createDiv({ cls: "bs-row bs-foot" });
+    const done = foot.createEl("button", { text: "Done", cls: "bs-btn bs-primary" });
+    done.addEventListener("click", () => this.close());
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
 // src/main.ts
 var VIEW_TYPE_BLOOM = "bloom-view";
-var DEFAULT_SETTINGS = { dark: false };
-var BloomView = class extends import_obsidian.ItemView {
+var DEFAULT_SETTINGS = { dark: false, defaultView: "home" };
+var TODO_FILE = "11-Todo/Daily Tasks.md";
+function esc(s) {
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
+}
+var BloomView = class extends import_obsidian2.ItemView {
   constructor(leaf, settings) {
     super(leaf);
     __publicField(this, "currentView", "home");
     __publicField(this, "dark", false);
     __publicField(this, "settings");
+    __publicField(this, "lastData", null);
+    __publicField(this, "calY", 2026);
+    __publicField(this, "calM", 7);
     // back-reference set by the plugin
     __publicField(this, "plugin");
     this.settings = settings;
     this.dark = settings.dark;
+    this.currentView = settings.defaultView || "home";
   }
   getViewType() {
     return VIEW_TYPE_BLOOM;
@@ -821,6 +950,10 @@ var BloomView = class extends import_obsidian.ItemView {
     this.settings.dark = dark;
     this.applyTheme();
   }
+  /** Re-read live vault data and rebuild the view. */
+  reload() {
+    this.render();
+  }
   async render() {
     this.containerEl.empty();
     const wrap = this.containerEl.createDiv();
@@ -829,6 +962,9 @@ var BloomView = class extends import_obsidian.ItemView {
         console.error("[Bloom] live data failed, using static fallback:", e);
         return loadBloomData();
       });
+      this.lastData = data;
+      this.calY = data.calendar.year;
+      this.calM = data.calendar.monthIndex;
       wrap.innerHTML = buildShell(data, /* @__PURE__ */ new Date(), this.currentView);
       this.wire(wrap);
       this.applyTheme();
@@ -863,6 +999,35 @@ var BloomView = class extends import_obsidian.ItemView {
       this.plugin.saveSettings();
       this.applyTheme();
     });
+    const newTask = root.querySelector("#new-task-btn");
+    newTask == null ? void 0 : newTask.addEventListener("click", () => this.addTask());
+    const settingsBtn = root.querySelector("#settings-btn");
+    settingsBtn == null ? void 0 : settingsBtn.addEventListener("click", () => {
+      new BloomSettingsModal(this.app, this.plugin).open();
+    });
+    root.querySelectorAll(".chk-row").forEach((row) => {
+      row.addEventListener("click", () => this.toggleTask(row));
+    });
+    root.querySelectorAll(".cal-arrow").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const dir = (btn.getAttribute("aria-label") || "").includes("Previous") ? -1 : 1;
+        let m = this.calM + dir;
+        let y = this.calY;
+        if (m < 0) {
+          m = 11;
+          y--;
+        } else if (m > 11) {
+          m = 0;
+          y++;
+        }
+        if (y < 2026 || y > 2035)
+          return;
+        this.calY = y;
+        this.calM = m;
+        if (this.lastData)
+          setCalendarMonth(this.containerEl, this.lastData, y, m);
+      });
+    });
   }
   filterTasks(q) {
     const tasksView2 = this.containerEl.querySelector('.view[data-view="tasks"]');
@@ -874,8 +1039,93 @@ var BloomView = class extends import_obsidian.ItemView {
       card.style.display = !q || name.includes(q) ? "" : "none";
     });
   }
+  async addTask() {
+    var _a, _b, _c;
+    const name = window.prompt("New task name:");
+    if (!name || !name.trim())
+      return;
+    const task = name.trim();
+    try {
+      const content = await this.app.vault.adapter.read(TODO_FILE);
+      const appended = content.replace(/\s*$/, "") + "\n- [ ] " + task + "\n";
+      await this.app.vault.adapter.write(TODO_FILE, appended);
+    } catch (e) {
+      console.error("[Bloom] addTask write failed:", e);
+      new import_obsidian2.Notice("Bloom: could not save new task");
+      return;
+    }
+    const todoBody = this.containerEl.querySelector('.board-col[data-col="todo"] .board-col-body');
+    if (todoBody) {
+      const card = document.createElement("div");
+      card.className = "t-card";
+      card.innerHTML = `<span class="t-tag" style="color:#b5627c">Daily</span><div class="t-name">${esc(task)}</div>`;
+      todoBody.appendChild(card);
+    }
+    const todoCol = this.containerEl.querySelector('.board-col[data-col="todo"]');
+    const todoCount = (_b = (_a = todoCol == null ? void 0 : todoCol.querySelector(".board-col-body")) == null ? void 0 : _a.children.length) != null ? _b : 0;
+    (_c = todoCol == null ? void 0 : todoCol.querySelector(".col-count")) == null ? void 0 : _c.replaceChildren(document.createTextNode(String(todoCount)));
+    this.refreshBoardSub();
+    const chkList = this.containerEl.querySelector('.view[data-view="home"] .chk-list');
+    if (chkList) {
+      const row = document.createElement("div");
+      row.className = "chk-row";
+      row.innerHTML = `<span class="chk"></span><span class="chk-name">${esc(task)}</span>`;
+      chkList.appendChild(row);
+      this.refreshTodayPill();
+    }
+    new import_obsidian2.Notice("Bloom: task added to Daily Tasks");
+  }
+  async toggleTask(row) {
+    var _a, _b, _c;
+    const file = row.dataset.file;
+    const name = (_b = (_a = row.querySelector(".chk-name")) == null ? void 0 : _a.textContent) != null ? _b : "";
+    const nowDone = !row.classList.contains("done");
+    row.classList.toggle("done", nowDone);
+    (_c = row.querySelector(".chk")) == null ? void 0 : _c.classList.toggle("on", nowDone);
+    if (file && this.app && name) {
+      try {
+        const content = await this.app.vault.adapter.read(file);
+        const lines = content.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          if (/^\s*-\s*\[[ xX]\]\s*/.test(lines[i]) && lines[i].includes(name)) {
+            lines[i] = lines[i].replace(/\[[ xX]\]/, `[${nowDone ? "x" : " "}]`);
+            break;
+          }
+        }
+        await this.app.vault.adapter.write(file, lines.join("\n"));
+      } catch (e) {
+        console.error("[Bloom] toggle write failed:", e);
+        new import_obsidian2.Notice("Bloom: could not save task state");
+      }
+    }
+    this.refreshTodayPill();
+  }
+  refreshBoardSub() {
+    const sub = this.containerEl.querySelector(".board-sub");
+    if (!sub)
+      return;
+    const num = (sel) => {
+      var _a, _b;
+      return parseInt((_b = (_a = this.containerEl.querySelector(sel)) == null ? void 0 : _a.textContent) != null ? _b : "0") || 0;
+    };
+    const open = num('.board-col[data-col="todo"] .col-count') + num('.board-col[data-col="doing"] .col-count');
+    const done = num('.board-col[data-col="done"] .col-count');
+    sub.textContent = `${open} open \xB7 ${done} done today`;
+  }
+  refreshTodayPill() {
+    const pill = this.containerEl.querySelector('.view[data-view="home"] .pill');
+    if (!pill)
+      return;
+    const rows = this.containerEl.querySelectorAll('.view[data-view="home"] .chk-row');
+    let done = 0;
+    rows.forEach((r) => {
+      if (r.classList.contains("done"))
+        done++;
+    });
+    pill.textContent = `${done}/${rows.length}`;
+  }
 };
-var BloomPlugin = class extends import_obsidian.Plugin {
+var BloomPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
     __publicField(this, "settings", DEFAULT_SETTINGS);
@@ -908,11 +1158,11 @@ var BloomPlugin = class extends import_obsidian.Plugin {
           this.saveSettings();
         }
       });
-      new import_obsidian.Notice("Bloom dashboard ready \u2014 click the dashboard icon in the left ribbon.");
+      new import_obsidian2.Notice("Bloom dashboard ready \u2014 click the dashboard icon in the left ribbon.");
       console.log("[Bloom] onload complete");
     } catch (e) {
       console.error("[Bloom] onload failed:", e);
-      new import_obsidian.Notice("Bloom failed to load: " + (e instanceof Error ? e.message : String(e)));
+      new import_obsidian2.Notice("Bloom failed to load: " + (e instanceof Error ? e.message : String(e)));
     }
   }
   async activateView() {
@@ -933,5 +1183,24 @@ var BloomPlugin = class extends import_obsidian.Plugin {
   }
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+  /** Called by the settings modal: persist + apply theme live. */
+  applyThemeExternal(dark) {
+    var _a;
+    this.settings.dark = dark;
+    (_a = this.view) == null ? void 0 : _a.setExternalTheme(dark);
+    this.saveSettings();
+  }
+  /** Called by the settings modal: re-read live vault data. */
+  reloadView() {
+    var _a;
+    (_a = this.view) == null ? void 0 : _a.reload();
+  }
+  /** Called by the settings modal: persist + switch the landing view. */
+  setDefaultView(id) {
+    var _a;
+    this.settings.defaultView = id;
+    (_a = this.view) == null ? void 0 : _a.setExternalView(id);
+    this.saveSettings();
   }
 };

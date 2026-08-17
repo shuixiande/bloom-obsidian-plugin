@@ -186,7 +186,7 @@ export async function loadBloomDataLive(app: App): Promise<BloomData> {
   const rawStudy = collectTasks(await read("11-Todo/Study Tasks.md"), "Learning");
   const rawProj = collectTasks(await read("11-Todo/Project Tasks.md"), "Project");
 
-  const todayTasks = rawDaily.slice(0, 6).map((t) => ({ name: t.name, done: t.done }));
+  const todayTasks = rawDaily.slice(0, 6).map((t) => ({ name: t.name, done: t.done, file: "11-Todo/Daily Tasks.md" }));
   if (todayTasks.length) {
     const done = todayTasks.filter((t) => t.done).length;
     d.todayTasks = todayTasks;
