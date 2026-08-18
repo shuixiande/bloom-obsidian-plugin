@@ -422,6 +422,9 @@ function showView(root, id) {
     eyebrow.textContent = h.eyebrow;
   if (name)
     name.textContent = h.name;
+  const wrap = root.querySelector(".bloom-content");
+  if (wrap)
+    wrap.classList.toggle("wide-content", id === "calendar");
 }
 
 // node_modules/lunar-typescript/dist/index.mjs
@@ -12390,6 +12393,9 @@ var BloomView = class extends import_obsidian2.ItemView {
       wrap.innerHTML = buildShell(data, /* @__PURE__ */ new Date(), this.currentView);
       this.wire(wrap);
       this.applyTheme();
+      const content = wrap.querySelector(".bloom-content");
+      if (content)
+        content.classList.toggle("wide-content", this.currentView === "calendar");
     } catch (e) {
       console.error("[Bloom] render failed:", e);
       wrap.innerHTML = '<div style="padding:24px;color:#b5627c">Bloom failed to render \u2014 see DevTools console.</div>';

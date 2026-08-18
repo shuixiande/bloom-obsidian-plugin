@@ -390,6 +390,9 @@ if you want to view the source, please visit the github repository of this plugi
       eyebrow.textContent = h.eyebrow;
     if (name)
       name.textContent = h.name;
+    const wrap = root.querySelector(".bloom-content");
+    if (wrap)
+      wrap.classList.toggle("wide-content", id === "calendar");
   }
 
   // src/data.ts

@@ -189,6 +189,9 @@
 /* ------------------------------- SCROLL --------------------------------- */
 .bloom-scroll { flex: 1 1 auto; overflow-y: auto; padding: 4px 32px 40px; }
 .bloom-content { max-width: 1080px; margin: 0 auto; }
+/* Wide layout (calendar): break the 1080-px cap so the month grid spans the
+   full main area and left-aligns to the padding edge. */
+.bloom-content.wide-content { max-width: none; margin: 0; }
 .view { animation: fade 0.18s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hidden { display: none !important; }
@@ -325,8 +328,11 @@
 .t-prog { font-size: 11px; color: var(--text-muted); margin-top: 5px; text-align: right; }
 
 /* ------------------------------ CALENDAR -------------------------------- */
-/* Full-width grid (no side panel — important dates live inside cells). */
+/* Full-width grid (no side panel — important dates live inside cells).
+   `wide-content` on .bloom-content breaks the 1080 cap; cal-wrap follows. */
 .bloom .cal-wrap { display: block; max-width: 1200px; }
+.bloom-content.wide-content ~ .bloom-scroll .cal-wrap,
+.bloom .bloom-content.wide-content .cal-wrap { max-width: none; }
 .bloom .cal-top {
   display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
   flex-wrap: wrap;

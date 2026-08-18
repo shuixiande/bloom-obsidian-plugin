@@ -431,4 +431,9 @@ export function showView(root: HTMLElement, id: string): void {
   const name = root.querySelector<HTMLElement>("#hdr-name");
   if (eyebrow) eyebrow.textContent = h.eyebrow;
   if (name) name.textContent = h.name;
+  // Calendar is a wide layout (full-width month grid, matching the reference
+  // design). Drop the 1080-px content cap on this view so it left-aligns to
+  // the main area instead of being centered with empty side margins.
+  const wrap = root.querySelector<HTMLElement>(".bloom-content");
+  if (wrap) wrap.classList.toggle("wide-content", id === "calendar");
 }

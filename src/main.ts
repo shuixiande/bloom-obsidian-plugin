@@ -94,6 +94,9 @@ export class BloomView extends ItemView {
       wrap.innerHTML = buildShell(data, new Date(), this.currentView);
       this.wire(wrap);
       this.applyTheme();
+      // Calendar needs the wide-content class for full-width left-aligned grid.
+      const content = wrap.querySelector<HTMLElement>(".bloom-content");
+      if (content) content.classList.toggle("wide-content", this.currentView === "calendar");
     } catch (e) {
       console.error("[Bloom] render failed:", e);
       wrap.innerHTML =
