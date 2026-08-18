@@ -11869,7 +11869,7 @@ function readTable(block) {
     const t = line.trim();
     if (!t.startsWith("|"))
       continue;
-    if (/^\|[\s:-]+\|$/.test(t))
+    if (/^\|[\s:|-]+\|$/.test(t))
       continue;
     rows.push(t.split("|").slice(1, -1).map((c) => c.trim()));
   }
@@ -11947,12 +11947,26 @@ function lunarMonthLabelFor(y, m1) {
   }
 }
 function holidayNameFor(y, m1, d) {
+  var _a;
   try {
     const h = HolidayUtil.getHoliday(y, m1 + 1, d);
-    return h && h.isWork() === false ? h.getName() : null;
+    if (h && h.isWork() === false)
+      return h.getName();
   } catch (e) {
-    return null;
   }
+  const key = `${m1 + 1}-${d}`;
+  const extra = {
+    "2-14": "\u60C5\u4EBA\u8282",
+    "3-8": "\u5987\u5973\u8282",
+    "4-1": "\u611A\u4EBA\u8282",
+    "5-4": "\u9752\u5E74\u8282",
+    "6-1": "\u513F\u7AE5\u8282",
+    "9-10": "\u6559\u5E08\u8282",
+    "10-31": "\u4E07\u5723\u8282",
+    "12-24": "\u5E73\u5B89\u591C",
+    "12-25": "\u5723\u8BDE\u8282"
+  };
+  return (_a = extra[key]) != null ? _a : null;
 }
 function catColor(c) {
   return c === "Daily" ? "#b5627c" : c === "Learning" ? "#4f7a3a" : "#5a6aa0";

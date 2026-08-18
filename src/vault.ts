@@ -52,7 +52,8 @@ function readTable(block: string): string[][] {
   for (const line of block.split("\n")) {
     const t = line.trim();
     if (!t.startsWith("|")) continue;
-    if (/^\|[\s:-]+\|$/.test(t)) continue;
+    // separator row: |---|---| — allow pipes inside so multi-col tables work
+    if (/^\|[\s:|-]+\|$/.test(t)) continue;
     rows.push(t.split("|").slice(1, -1).map((c) => c.trim()));
   }
   return rows;
@@ -134,10 +135,24 @@ function lunarMonthLabelFor(y: number, m1: number): string {
 function holidayNameFor(y: number, m1: number, d: number): string | null {
   try {
     const h = HolidayUtil.getHoliday(y, m1 + 1, d);
-    return h && h.isWork() === false ? h.getName() : null;
+    if (h && h.isWork() === false) return h.getName();
   } catch {
-    return null;
+    /* fall through to extra list below */
   }
+  // Non-statutory observances the reference design shows as copper banners
+  const key = `${m1 + 1}-${d}`;
+  const extra: Record<string, string> = {
+    "2-14": "情人节",
+    "3-8": "妇女节",
+    "4-1": "愚人节",
+    "5-4": "青年节",
+    "6-1": "儿童节",
+    "9-10": "教师节",
+    "10-31": "万圣节",
+    "12-24": "平安夜",
+    "12-25": "圣诞节",
+  };
+  return extra[key] ?? null;
 }
 
 type RawTask = { name: string; done: boolean; category: Task["category"] };
