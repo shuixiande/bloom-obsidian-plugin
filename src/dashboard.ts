@@ -2,10 +2,9 @@
    Bloom — view rendering (single source of truth)
    Pure HTML builders. No Obsidian imports so the same markup is reused by the
    standalone prototype (prototype.ts). Event wiring lives in main.ts /
-   prototype.ts. Layout, copy and color tokens all reference the Ardot
-   "Obsidian 移动端仪表盘插件 - XY153" frames.
+   prototype.ts.
    ========================================================================= */
-import type { BloomData, Task, ExpenseCategory } from "./data";
+import type { BloomData, Task, ExpenseCategory, CalEvent, DayMeta } from "./data";
 
 export const ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>`,
@@ -22,6 +21,7 @@ export const ICONS = {
   moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`,
   chevL: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>`,
   chevR: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-11"/></svg>`,
 };
 
 const NAV = [
@@ -50,6 +50,23 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "HH:MM" -> sortable number; "8pm" -> 20*60; anything else -> 25*60 (end of day). */
+function timeToMin(t?: string): number {
+  if (!t) return 25 * 60;
+  const ampm = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+  if (ampm) {
+    let h = parseInt(ampm[1], 10);
+    const m = ampm[2] ? parseInt(ampm[2], 10) : 0;
+    if (/pm/i.test(ampm[3]) && h < 12) h += 12;
+    if (/am/i.test(ampm[3]) && h === 12) h = 0;
+    return h * 60 + m;
+  }
+  const h24 = t.match(/^(\d{1,2})(?::(\d{2}))?$/);
+  if (h24) return parseInt(h24[1], 10) * 60 + (h24[2] ? parseInt(h24[2], 10) : 0);
+  return 25 * 60;
+}
 
 function bloomMark(): string {
   return `<svg class="bloom-mark" viewBox="0 0 32 32" role="img" aria-label="Bloom">
@@ -110,155 +127,117 @@ function tasksView(d: BloomData): string {
 }
 
 /* ------------------------------ DASHBOARD -------------------------------- */
+/** Ultra-minimal "single thread" home: greeting + one big top task card. */
 function homeView(d: BloomData): string {
-  const stat = d.statStrip
-    .map(
-      (s) => `<div class="stat">
-        <div class="s-label">${s.label}</div>
-        <div class="s-value">${s.value}${s.unit ? `<span class="s-unit">${s.unit}</span>` : ""}</div>
-        <div class="s-sub">${s.sub ?? ""}</div>
+  const t = d.topTask;
+  const card = t
+    ? `<div class="top-task-card ${t.done ? "is-done" : ""}" data-file="${t.file ?? ""}">
+        <div class="ttc-eyebrow">TODAY'S #1</div>
+        <button class="ttc-check ${t.done ? "on" : ""}" id="top-task-check" aria-label="Mark done">
+          ${ICONS.check}
+        </button>
+        <div class="ttc-title">${t.title}</div>
+        ${t.description ? `<div class="ttc-desc">${t.description}</div>` : ""}
+        <div class="ttc-foot">
+          <span class="ttc-source">${t.file ? `📝 ${t.file.split("/").pop()}` : ""}</span>
+          <span class="ttc-more">${d.moreTasksToday > 0 ? `${d.moreTasksToday} more tasks today →` : "All caught up"}</span>
+        </div>
       </div>`
-    )
-    .join("");
-
-  const todayRows = d.todayTasks
-    .map(
-      (t) => `<div class="chk-row ${t.done ? "done" : ""}" data-file="${t.file ?? ""}">
-        <span class="chk ${t.done ? "on" : ""}">${t.done ? "✓" : ""}</span>
-        <span class="chk-name">${t.name}</span>
-      </div>`
-    )
-    .join("");
-
-  const projRows = d.projects
-    .map(
-      (p) => `<div class="proj">
-        <div class="proj-top"><span class="proj-name">${p.name}</span><span class="proj-pct">${p.progress}%</span></div>
-        <div class="proj-bar"><div class="proj-fill" style="width:${p.progress}%"></div></div>
-      </div>`
-    )
-    .join("");
-
-  const flowTiles = d.dailyFlow
-    .map((f) => `<div class="flow-tile"><div class="flow-ico">${f.icon}</div><div class="flow-label">${f.label}</div></div>`)
-    .join("");
-
-  const expCats = d.expenses.categories
-    .map((c) => `<div class="exp-seg" style="width:${c.pct}%;background:${c.color}"></div>`)
-    .join("");
-  const expList = d.expenses.categories
-    .map(
-      (c) => `<div class="exp-row"><span class="swatch" style="background:${c.color}"></span>
-        <span class="exp-name">${c.name}</span><span class="exp-amt">¥${c.amount.toFixed(2)}</span></div>`
-    )
-    .join("");
-
-  const wellItems = d.wellness
-    .map(
-      (w) => `<div class="well-item">
-        <div class="well-label" style="color:${w.color ?? "var(--ink)"}">${w.label}</div>
-        <div class="well-value">${w.value}</div>
-        <div class="well-sub">${w.sub}</div>
-      </div>`
-    )
-    .join("");
+    : `<div class="top-task-card placeholder">
+        <div class="ttc-eyebrow">TODAY'S #1</div>
+        <div class="ttc-title muted">No top task set today</div>
+        <div class="ttc-desc">Add <code>topTask: "..."</code> to today's Daily Note frontmatter.</div>
+      </div>`;
 
   return `<section class="view" data-view="home">
-    <div class="stat-strip">${stat}</div>
-    <div class="dash-grid">
-      <div class="dash-left">
-        <div class="card">
-          <div class="card-head">
-            <div><div class="t-title">Today's Tasks</div></div>
-            <span class="pill">${d.todayTasks.filter((t) => t.done).length}/${d.todayTasks.length}</span>
-          </div>
-          <div class="chk-list">${todayRows}</div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <div><div class="t-title">Active Projects</div></div>
-            <a class="link" href="#">View all</a>
-          </div>
-          <div class="proj-list">${projRows}</div>
-        </div>
-      </div>
-      <div class="dash-right">
-        <div class="card">
-          <div class="card-head"><div><div class="t-title accent-peach">Daily Flow</div></div></div>
-          <div class="flow">${flowTiles}</div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <div><div class="t-title">Expenses</div></div>
-            <span class="tag-mini">${d.expenses.monthTag}</span>
-          </div>
-          <div class="exp-today">¥${d.expenses.today.toFixed(2)} <span>today</span></div>
-          <div class="exp-bar">${expCats}</div>
-          <div class="exp-list">${expList}</div>
-        </div>
-        <div class="card">
-          <div class="card-head"><div><div class="t-title">Wellness</div></div></div>
-          <div class="well">${wellItems}</div>
-        </div>
-        <div class="card lib-card">
-          <div class="lib-item"><span class="lib-num">${d.library.subjects}</span><span class="lib-lbl">subjects</span><span class="lib-cap">Learning</span></div>
-          <div class="lib-item"><span class="lib-num">${d.library.books}</span><span class="lib-lbl">read</span><span class="lib-cap">Books</span></div>
-        </div>
-      </div>
+    <div class="home-wrap">
+      ${card}
     </div>
   </section>`;
 }
 
 /* ------------------------------ CALENDAR -------------------------------- */
-function calendarView(d: BloomData): string {
-  const c = d.calendar;
-  const lead = (c.firstDayJS + 6) % 7; // Monday-start leading blanks
+const MAX_EVENTS_IN_CELL = 4;
+
+function eventRow(e: CalEvent): string {
+  const dot = `<span class="cal-ev-dot" style="background:${e.color ?? "#7d8cc4"}"></span>`;
+  const time = e.time ? `<span class="cal-ev-time">${e.time}</span>` : "";
+  return `<div class="cal-ev ${e.kind}">
+    ${dot}${time}<span class="cal-ev-label">${e.label}</span>
+  </div>`;
+}
+
+function holidayBanner(e: CalEvent): string {
+  return `<div class="cal-holiday" style="background:#b87b5a">${e.label}</div>`;
+}
+
+/** Render a single day cell, used by both initial paint and month-nav. */
+export function calCellHtml(
+  day: DayMeta | undefined,
+  isToday: boolean,
+  weekend: boolean
+): string {
+  if (!day) return `<div class="cal-cell empty"></div>`;
+  const cls = [
+    "cal-cell",
+    isToday ? "today" : "",
+    weekend ? "weekend" : "",
+    day.events.length ? "has-events" : "",
+  ].filter(Boolean).join(" ");
+  // Holiday banner (first event of kind === "holiday")
+  const holiday = day.events.find((e) => e.kind === "holiday");
+  const banner = holiday ? holidayBanner(holiday) : "";
+  const otherEvents = day.events.filter((e) => e.kind !== "holiday");
+  const sorted = [...otherEvents].sort((a, b) => timeToMin(a.time) - timeToMin(b.time));
+  const shown = sorted.slice(0, MAX_EVENTS_IN_CELL);
+  const overflow = sorted.length - shown.length;
+  const overflowHtml = overflow > 0 ? `<div class="cal-ev-more">+${overflow} more</div>` : "";
+  return `<div class="${cls}">
+    <div class="cal-head">
+      <span class="cal-day">${day.day}</span>
+      ${day.lunarLabel ? `<span class="cal-lunar">(${day.lunarLabel})</span>` : ""}
+    </div>
+    ${banner}
+    <div class="cal-events">${shown.map(eventRow).join("")}${overflowHtml}</div>
+  </div>`;
+}
+
+function calendarGridHtml(
+  year: number,
+  monthIndex: number,
+  daysInMonth: number,
+  today: number,
+  isCurrentMonth: boolean,
+  monthEvents: DayMeta[]
+): string {
+  const lead = (new Date(year, monthIndex, 1).getDay() + 6) % 7; // Monday-start blanks
   const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   let cells = "";
   for (let i = 0; i < lead; i++) cells += `<div class="cal-cell empty"></div>`;
-  for (let day = 1; day <= c.daysInMonth; day++) {
-    const isToday = day === c.today;
-    const ev = c.events.find((e) => e.day === day);
-    const cls = ["cal-cell", isToday ? "today" : "", ev ? "event " + ev.kind : ""].filter(Boolean).join(" ");
-    cells += `<div class="${cls}">
-      <span class="cal-day">${day}</span>
-      ${isToday ? '<span class="cal-today">Today</span>' : ""}
-    </div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const jsDow = new Date(year, monthIndex, day).getDay(); // 0=Sun..6=Sat
+    const weekend = jsDow === 0 || jsDow === 6;
+    const isToday = isCurrentMonth && day === today;
+    const dayMeta = monthEvents[day - 1];
+    cells += calCellHtml(dayMeta, isToday, weekend);
   }
-  const imp = d.importantDates
-    .map(
-      (e) => `<div class="imp-item">
-        <span class="imp-pill" style="background:${e.color}1f;color:${e.color}">${e.date}</span>
-        <span class="imp-title">${e.title}</span>
-      </div>`
-    )
-    .join("");
-  const noteLines = d.todayNote.lines.map((l) => `<div class="tn-line">${l}</div>`).join("");
+  return dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
+}
 
+function calendarView(d: BloomData): string {
+  const c = d.calendar;
+  const grid = calendarGridHtml(c.year, c.monthIndex, c.daysInMonth, c.today, true, d.monthEvents);
   return `<section class="view hidden" data-view="calendar">
     <div class="cal-wrap">
       <div class="cal-main card">
         <div class="cal-top">
+          <button class="cal-today-btn" id="cal-today-btn" title="Jump to today">Today</button>
+          <button class="cal-arrow" data-cal-nav="-1" aria-label="Previous month">${ICONS.chevL}</button>
+          <button class="cal-arrow" data-cal-nav="1" aria-label="Next month">${ICONS.chevR}</button>
           <div class="cal-title">${c.monthLabel}</div>
-          <div class="cal-nav">
-            <button class="cal-arrow" aria-label="Previous month">${ICONS.chevL}</button>
-            <button class="cal-arrow" aria-label="Next month">${ICONS.chevR}</button>
-          </div>
+          <div class="cal-lunar-title" id="cal-lunar-title"></div>
         </div>
-        <div class="cal-grid">
-          ${dow.map((x) => `<div class="cal-dow">${x}</div>`).join("")}
-          ${cells}
-        </div>
-      </div>
-      <div class="cal-side">
-        <div class="card">
-          <div class="card-head"><div><div class="t-title">Important Dates</div></div></div>
-          <div class="imp-list">${imp}</div>
-        </div>
-        <div class="card">
-          <div class="card-head"><div><div class="t-title">${d.todayNote.title}</div></div></div>
-          <div class="tn">${noteLines}</div>
-        </div>
+        <div class="cal-grid" id="cal-grid">${grid}</div>
       </div>
     </div>
   </section>`;
@@ -360,6 +339,7 @@ export function buildShell(d: BloomData, _now: Date, initialView = "home"): stri
   ).join("");
 
   const h = HEADER[initialView] ?? HEADER.home;
+  const dateLabel = `${d.todayDate.weekday}, ${d.todayDate.solar}`;
 
   return `<div class="bloom" id="bloom-root">
     <aside class="bloom-sidebar">
@@ -378,7 +358,7 @@ export function buildShell(d: BloomData, _now: Date, initialView = "home"): stri
         <div class="hdr-greet">
           <div class="hdr-eyebrow" id="hdr-eyebrow">${h.eyebrow}</div>
           <div class="hdr-name" id="hdr-name">${h.name}</div>
-          <div class="hdr-date" id="hdr-date">${d.dateLabel}</div>
+          <div class="hdr-date" id="hdr-date">${dateLabel}</div>
         </div>
         <div class="header-right">
           <div class="search-box">${ICONS.search}<input id="bloom-search" type="text" placeholder="Search tasks, notes…" /></div>
@@ -403,24 +383,39 @@ export function buildShell(d: BloomData, _now: Date, initialView = "home"): stri
 }
 
 /* --------------------------- CALENDAR NAVIGATION ------------------------ */
-/** Re-render the calendar title + grid for an arbitrary month (nav arrows). */
-export function setCalendarMonth(root: HTMLElement, d: BloomData, year: number, monthIndex: number): void {
-  const showToday = year === d.calendar.year && monthIndex === d.calendar.monthIndex;
-  const lead = (new Date(year, monthIndex, 1).getDay() + 6) % 7; // Monday-start blanks
-  const days = new Date(year, monthIndex + 1, 0).getDate();
+/** Track the currently displayed month in the calendar (mutable). */
+export type CalNav = { year: number; monthIndex: number };
+
+export function newCalNav(d: BloomData): CalNav {
+  return { year: d.calendar.year, monthIndex: d.calendar.monthIndex };
+}
+
+/** Re-render the calendar title + grid for an arbitrary month. */
+export function setCalendarMonth(root: HTMLElement, d: BloomData, nav: CalNav): void {
+  const today = new Date();
+  const isCurrentMonth = nav.year === today.getFullYear() && nav.monthIndex === today.getMonth();
+  const lead = (new Date(nav.year, nav.monthIndex, 1).getDay() + 6) % 7;
+  const days = new Date(nav.year, nav.monthIndex + 1, 0).getDate();
   const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   let cells = "";
   for (let i = 0; i < lead; i++) cells += `<div class="cal-cell empty"></div>`;
   for (let day = 1; day <= days; day++) {
-    const isToday = showToday && day === d.calendar.today;
-    const ev = showToday ? d.calendar.events.find((e) => e.day === day) : undefined;
-    const cls = ["cal-cell", isToday ? "today" : "", ev ? "event " + ev.kind : ""].filter(Boolean).join(" ");
-    cells += `<div class="${cls}"><span class="cal-day">${day}</span>${isToday ? '<span class="cal-today">Today</span>' : ""}</div>`;
+    const jsDow = new Date(nav.year, nav.monthIndex, day).getDay();
+    const weekend = jsDow === 0 || jsDow === 6;
+    const isToday = isCurrentMonth && day === today.getDate();
+    const dayMeta = d.monthEvents[day - 1];
+    cells += calCellHtml(dayMeta, isToday, weekend);
   }
   const title = root.querySelector<HTMLElement>(".cal-title");
-  if (title) title.textContent = `${MONTHS[monthIndex]} ${year}`;
-  const grid = root.querySelector<HTMLElement>(".cal-grid");
+  if (title) title.textContent = `${MONTHS[nav.monthIndex]} ${nav.year}`;
+  const grid = root.querySelector<HTMLElement>("#cal-grid");
   if (grid) grid.innerHTML = dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
+}
+
+/** Shift month by `delta` (±1, ±2...). */
+export function shiftCalendarMonth(nav: CalNav, delta: number): CalNav {
+  const total = nav.year * 12 + nav.monthIndex + delta;
+  return { year: Math.floor(total / 12), monthIndex: ((total % 12) + 12) % 12 };
 }
 
 /** Switch the active view: toggles sections + nav active state + header text. */

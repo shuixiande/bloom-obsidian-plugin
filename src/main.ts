@@ -1,11 +1,18 @@
 /* =========================================================================
    Bloom — Obsidian plugin entry
    Mounts the dashboard, wires nav + theme toggle + real interactions
-   (new task, checkbox write-back, calendar month navigation), and persists
+   (new task, top-task completion, calendar month navigation), and persists
    the theme preference. styles.css at the plugin root is auto-loaded.
    ========================================================================= */
 import { ItemView, WorkspaceLeaf, Plugin, Notice } from "obsidian";
-import { buildShell, showView, setCalendarMonth } from "./dashboard";
+import {
+  buildShell,
+  showView,
+  setCalendarMonth,
+  newCalNav,
+  shiftCalendarMonth,
+} from "./dashboard";
+import type { CalNav } from "./dashboard";
 import { loadBloomDataLive } from "./vault";
 import { loadBloomData } from "./data";
 import type { BloomData } from "./data";
@@ -15,7 +22,7 @@ export const VIEW_TYPE_BLOOM = "bloom-view";
 
 interface BloomSettings {
   dark: boolean;
-  defaultView?: string; // one of: home | tasks | calendar | trackers
+  defaultView?: string;
 }
 
 const DEFAULT_SETTINGS: BloomSettings = { dark: false, defaultView: "home" };
@@ -34,8 +41,7 @@ export class BloomView extends ItemView {
   private dark = false;
   private settings: BloomSettings;
   private lastData: BloomData | null = null;
-  private calY = 2026;
-  private calM = 7;
+  private calNav: CalNav = { year: 2026, monthIndex: 7 };
 
   constructor(leaf: WorkspaceLeaf, settings: BloomSettings) {
     super(leaf);
@@ -71,7 +77,6 @@ export class BloomView extends ItemView {
     this.applyTheme();
   }
 
-  /** Re-read live vault data and rebuild the view. */
   reload() {
     this.render();
   }
@@ -85,8 +90,7 @@ export class BloomView extends ItemView {
         return loadBloomData();
       });
       this.lastData = data;
-      this.calY = data.calendar.year;
-      this.calM = data.calendar.monthIndex;
+      this.calNav = newCalNav(data);
       wrap.innerHTML = buildShell(data, new Date(), this.currentView);
       this.wire(wrap);
       this.applyTheme();
@@ -107,6 +111,7 @@ export class BloomView extends ItemView {
   }
 
   private wire(root: HTMLElement) {
+    // Sidebar nav
     root.querySelectorAll<HTMLElement>(".nav-item").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.nav!;
@@ -115,10 +120,12 @@ export class BloomView extends ItemView {
       });
     });
 
+    // Search box → filter Tasks board
     root.querySelectorAll<HTMLElement>(".search-box input").forEach((inp) => {
       inp.addEventListener("input", () => this.filterTasks(inp.value.trim().toLowerCase()));
     });
 
+    // Theme toggle
     const toggle = root.querySelector<HTMLElement>("#theme-toggle");
     toggle?.addEventListener("click", () => {
       this.dark = !this.dark;
@@ -137,23 +144,26 @@ export class BloomView extends ItemView {
       new BloomSettingsModal(this.app, this.plugin).open();
     });
 
-    // Today's Tasks checkboxes → toggle visual + write back to source file
-    root.querySelectorAll<HTMLElement>(".chk-row").forEach((row) => {
-      row.addEventListener("click", () => this.toggleTask(row));
-    });
+    // Home: top-task complete button
+    const topCheck = root.querySelector<HTMLElement>("#top-task-check");
+    topCheck?.addEventListener("click", () => this.toggleTopTask());
 
-    // Calendar month navigation
-    root.querySelectorAll<HTMLElement>(".cal-arrow").forEach((btn) => {
+    // Calendar month navigation (arrows + Today button)
+    root.querySelectorAll<HTMLElement>("[data-cal-nav]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const dir = (btn.getAttribute("aria-label") || "").includes("Previous") ? -1 : 1;
-        let m = this.calM + dir;
-        let y = this.calY;
-        if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
-        if (y < 2026 || y > 2035) return;
-        this.calY = y;
-        this.calM = m;
-        if (this.lastData) setCalendarMonth(this.containerEl, this.lastData, y, m);
+        const dir = parseInt(btn.getAttribute("data-cal-nav") || "0", 10);
+        if (!dir) return;
+        const next = shiftCalendarMonth(this.calNav, dir);
+        if (next.year < 2026 || next.year > 2035) return;
+        this.calNav = next;
+        if (this.lastData) setCalendarMonth(this.containerEl, this.lastData, next);
       });
+    });
+    const todayBtn = root.querySelector<HTMLElement>("#cal-today-btn");
+    todayBtn?.addEventListener("click", () => {
+      if (!this.lastData) return;
+      this.calNav = newCalNav(this.lastData);
+      setCalendarMonth(this.containerEl, this.lastData, this.calNav);
     });
   }
 
@@ -192,41 +202,37 @@ export class BloomView extends ItemView {
     const todoCount = todoCol?.querySelector(".board-col-body")?.children.length ?? 0;
     todoCol?.querySelector(".col-count")?.replaceChildren(document.createTextNode(String(todoCount)));
     this.refreshBoardSub();
-    // also surface it in the Today's Tasks list on the Dashboard
-    const chkList = this.containerEl.querySelector<HTMLElement>('.view[data-view="home"] .chk-list');
-    if (chkList) {
-      const row = document.createElement("div");
-      row.className = "chk-row";
-      row.innerHTML = `<span class="chk"></span><span class="chk-name">${esc(task)}</span>`;
-      chkList.appendChild(row);
-      this.refreshTodayPill();
-    }
     new Notice("Bloom: task added to Daily Tasks");
   }
 
-  private async toggleTask(row: HTMLElement) {
-    const file = row.dataset.file;
-    const name = row.querySelector(".chk-name")?.textContent ?? "";
-    const nowDone = !row.classList.contains("done");
-    row.classList.toggle("done", nowDone);
-    row.querySelector(".chk")?.classList.toggle("on", nowDone);
-    if (file && this.app && name) {
-      try {
-        const content = await this.app.vault.adapter.read(file);
-        const lines = content.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-          if (/^\s*-\s*\[[ xX]\]\s*/.test(lines[i]) && lines[i].includes(name)) {
-            lines[i] = lines[i].replace(/\[[ xX]\]/, `[${nowDone ? "x" : " "}]`);
-            break;
-          }
+  /** Mark the home "today's #1" task complete: flip the visual + write back to source file. */
+  private async toggleTopTask() {
+    const card = this.containerEl.querySelector<HTMLElement>(".top-task-card");
+    const btn = this.containerEl.querySelector<HTMLElement>("#top-task-check");
+    if (!card || !btn) return;
+    const file = card.dataset.file || TODO_FILE;
+    const title = card.querySelector<HTMLElement>(".ttc-title")?.textContent?.trim() ?? "";
+    if (!title) return;
+    const wasDone = card.classList.contains("is-done");
+    const nextDone = !wasDone;
+    card.classList.toggle("is-done", nextDone);
+    btn.classList.toggle("on", nextDone);
+    // Best-effort write-back: find the first line in the source file that contains the title
+    try {
+      const content = await this.app.vault.adapter.read(file);
+      const lines = content.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        if (/^\s*-\s*\[[ xX]\]\s*/.test(lines[i]) && lines[i].includes(title)) {
+          lines[i] = lines[i].replace(/\[[ xX]\]/, `[${nextDone ? "x" : " "}]`);
+          break;
         }
-        await this.app.vault.adapter.write(file, lines.join("\n"));
-      } catch (e) {
-        console.error("[Bloom] toggle write failed:", e);
-        new Notice("Bloom: could not save task state");
       }
+      await this.app.vault.adapter.write(file, lines.join("\n"));
+      new Notice(nextDone ? "Bloom: #1 marked done" : "Bloom: #1 reopened");
+    } catch (e) {
+      console.error("[Bloom] toggleTopTask write failed:", e);
+      new Notice("Bloom: could not save #1 state (Daily Note may not exist)");
     }
-    this.refreshTodayPill();
   }
 
   private refreshBoardSub() {
@@ -236,17 +242,6 @@ export class BloomView extends ItemView {
     const open = num('.board-col[data-col="todo"] .col-count') + num('.board-col[data-col="doing"] .col-count');
     const done = num('.board-col[data-col="done"] .col-count');
     sub.textContent = `${open} open · ${done} done today`;
-  }
-
-  private refreshTodayPill() {
-    const pill = this.containerEl.querySelector<HTMLElement>('.view[data-view="home"] .pill');
-    if (!pill) return;
-    const rows = this.containerEl.querySelectorAll('.view[data-view="home"] .chk-row');
-    let done = 0;
-    rows.forEach((r) => {
-      if (r.classList.contains("done")) done++;
-    });
-    pill.textContent = `${done}/${rows.length}`;
   }
 
   // back-reference set by the plugin
@@ -315,17 +310,14 @@ export default class BloomPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  /** Called by the settings modal: persist + apply theme live. */
   applyThemeExternal(dark: boolean) {
     this.settings.dark = dark;
     this.view?.setExternalTheme(dark);
     this.saveSettings();
   }
-  /** Called by the settings modal: re-read live vault data. */
   reloadView() {
     this.view?.reload();
   }
-  /** Called by the settings modal: persist + switch the landing view. */
   setDefaultView(id: string) {
     this.settings.defaultView = id;
     this.view?.setExternalView(id);

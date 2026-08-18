@@ -1,16 +1,16 @@
 /* =========================================================================
-   Bloom — single source of truth for all views
-   Values mirror the real XY153 vault (read 2026-08-16). The design frames in
-   Ardot are the visual reference; this dataset supplies the truthful content
-   that the HTML must render. Swap `loadBloomData()` for live Obsidian vault
-   reads to go production.
+   Bloom — single source of truth for all views.
+   Static defaults mirror a realistic vault populated with the user's routine
+   (8pm Medication, 9pm Reading, 7pm Bible study) so the prototype renders the
+   intended look. Swap `loadBloomData()` for live Obsidian vault reads via
+   `loadBloomDataLive()` in `vault.ts` to go production.
    ========================================================================= */
 
 export interface Task {
   name: string;
   category: "Daily" | "Learning" | "Project";
-  color: string; // css color for the category tag text
-  progress?: number; // 0-100 when the task has a progress bar
+  color: string;
+  progress?: number;
 }
 
 export interface StatItem {
@@ -23,12 +23,12 @@ export interface StatItem {
 export interface TodayTask {
   name: string;
   done: boolean;
-  file?: string; // source markdown file, used for checkbox write-back
+  file?: string;
 }
 
 export interface Project {
   name: string;
-  progress: number; // 0-100
+  progress: number;
 }
 
 export interface FlowTile {
@@ -40,7 +40,7 @@ export interface ExpenseCategory {
   name: string;
   amount: number;
   pct: number;
-  color: string; // css color (var or hex)
+  color: string;
 }
 
 export interface WellnessItem {
@@ -50,42 +50,71 @@ export interface WellnessItem {
   color?: string;
 }
 
+/** A timed or named event that lands on a specific calendar day. */
 export interface CalEvent {
+  day: number;          // 1-based day-of-month
+  kind: "holiday" | "task" | "routine" | "note";
+  label: string;        // shown in the cell: "Medication (Time Blocking)"
+  time?: string;        // "8pm" or "20:00" — optional, displayed before label
+  color?: string;       // optional override for the dot color
+}
+
+/** Per-day metadata for the monthly grid (lunar label + all events). */
+export interface DayMeta {
   day: number;
-  kind: "peach" | "peri";
+  lunarLabel?: string;  // "廿三" / "初一"
+  events: CalEvent[];   // already sorted: holiday first, then by time
 }
 
 export interface ImportantDate {
   date: string;
   title: string;
-  color: string; // hex, used for pill + soft tint
+  color: string;
+}
+
+export interface TopTask {
+  title: string;
+  description?: string;
+  file?: string;        // source md, used for write-back
+  done: boolean;
+}
+
+export interface TodayDate {
+  solar: string;        // "Aug 16"
+  weekday: string;      // "Sunday"
+  lunar: string;        // "七月初二" (best-effort)
 }
 
 export interface BloomData {
   owner: string;
   logoSub: string;
   planLabel: string;
-  dateLabel: string; // e.g. "Sunday, August 16"
+  dateLabel: string;
+  todayDate: TodayDate;
+  /** Today's #1 task — the single most prominent item on the home dashboard. */
+  topTask: TopTask | null;
+  /** Remaining tasks for today (sorted: incomplete first, then completed). */
+  moreTasksToday: number;
+  // Legacy fields kept so non-home views keep compiling (Tasks, Trackers still
+  // consume them). Home view no longer renders them.
   statStrip: StatItem[];
   todayTasks: TodayTask[];
   projects: Project[];
   dailyFlow: FlowTile[];
-  expenses: {
-    today: number;
-    monthTag: string; // "AUG"
-    categories: ExpenseCategory[];
-  };
+  expenses: { today: number; monthTag: string; categories: ExpenseCategory[] };
   wellness: WellnessItem[];
   library: { subjects: number; books: number };
   tasks: { todo: Task[]; doing: Task[]; done: Task[] };
+  // Per-day metadata for the redesigned calendar grid (length = daysInMonth).
+  monthEvents: DayMeta[];
+  // Bookkeeping the calendar header still needs.
   calendar: {
     monthLabel: string;
     year: number;
-    monthIndex: number; // 0-based
-    firstDayJS: number; // getDay() of day 1 (0=Sun) — Aug 1 2026 is Saturday => 6
+    monthIndex: number;
+    firstDayJS: number;
     daysInMonth: number;
     today: number;
-    events: CalEvent[];
   };
   importantDates: ImportantDate[];
   todayNote: { title: string; lines: string[] };
@@ -97,12 +126,53 @@ export interface BloomData {
   };
 }
 
+// ---------- helpers (pure) ---------------------------------------------------
+
+const ROUTINE_COLOR = "#7d8cc4";          // periwinkle — daily routine
+const MEDICATION_COLOR = "#b5627c";       // pink — medication (Time Blocking)
+const BIBLE_COLOR = "#7fb069";            // sage — Bible study
+const HOLIDAY_COLOR = "#b87b5a";          // copper — holidays (banner style)
+
+/** Generate a realistic August 2026 month of routine events as static fallback. */
+function defaultMonthEvents(): DayMeta[] {
+  const events: DayMeta[] = [];
+  for (let day = 1; day <= 31; day++) {
+    const dayEvents: CalEvent[] = [];
+    // Medication every day at 8pm (Time Blocking)
+    dayEvents.push({ day, kind: "routine", time: "8pm", label: "Medication (Time Blocking)", color: MEDICATION_COLOR });
+    // Reading every day at 9pm
+    dayEvents.push({ day, kind: "routine", time: "9pm", label: "Reading", color: ROUTINE_COLOR });
+    // Bible study Mon/Wed/Fri at 7pm
+    if ([1, 3, 5, 8, 10, 12, 15, 17, 19, 22, 24, 26, 29, 31].includes(day)) {
+      dayEvents.push({ day, kind: "routine", time: "7pm", label: "Bible study", color: BIBLE_COLOR });
+    }
+    events.push({ day, events: dayEvents });
+  }
+  // Chinese public holidays for Aug 2026 (none in Aug — placeholder for Sept)
+  // Sample important-date events on Aug 20 + 25 (kept from old design)
+  events[19].events.push({ day: 20, kind: "task", time: "10am", label: "Dentist appointment", color: "#e8935f" });
+  events[24].events.push({ day: 25, kind: "task", time: "all day", label: "Project deadline", color: "#7d8cc4" });
+  return events;
+}
+
 export function loadBloomData(): BloomData {
   return {
     owner: "Candice",
     logoSub: "vault OS",
     planLabel: "Free plan",
     dateLabel: "Sunday, August 16",
+    todayDate: {
+      solar: "Aug 16",
+      weekday: "Sunday",
+      lunar: "七月初二",
+    },
+    topTask: {
+      title: "Cook dinner",
+      description: "Make the chicken stir-fry, set the table, eat before 8pm medication.",
+      file: "11-Todo/Daily Tasks.md",
+      done: false,
+    },
+    moreTasksToday: 4,
     statStrip: [
       { label: "Tasks", value: "2/5", sub: "done today" },
       { label: "Weight", value: "50.0", unit: "kg", sub: "0.0 this week" },
@@ -157,17 +227,14 @@ export function loadBloomData(): BloomData {
         { name: "Skincare science", category: "Learning", color: "#4f7a3a" },
       ],
     },
+    monthEvents: defaultMonthEvents(),
     calendar: {
       monthLabel: "August 2026",
       year: 2026,
       monthIndex: 7,
-      firstDayJS: 6, // Aug 1, 2026 is a Saturday
+      firstDayJS: 6, // Aug 1, 2026 is Saturday
       daysInMonth: 31,
       today: 16,
-      events: [
-        { day: 20, kind: "peach" },
-        { day: 25, kind: "peri" },
-      ],
     },
     importantDates: [
       { date: "Aug 20", title: "Dentist appointment", color: "#e8935f" },

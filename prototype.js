@@ -18,7 +18,8 @@ if you want to view the source, please visit the github repository of this plugi
     sun: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,
     moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`,
     chevL: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>`,
-    chevR: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`
+    chevR: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
+    check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-11"/></svg>`
   };
   var NAV = [
     { id: "home", label: "Home", icon: ICONS.home },
@@ -40,6 +41,38 @@ if you want to view the source, please visit the github repository of this plugi
     books: { eyebrow: "Your shelf", name: "Books" },
     projects: { eyebrow: "In progress", name: "Projects" }
   };
+  var MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+  ];
+  function timeToMin(t) {
+    if (!t)
+      return 25 * 60;
+    const ampm = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+    if (ampm) {
+      let h = parseInt(ampm[1], 10);
+      const m = ampm[2] ? parseInt(ampm[2], 10) : 0;
+      if (/pm/i.test(ampm[3]) && h < 12)
+        h += 12;
+      if (/am/i.test(ampm[3]) && h === 12)
+        h = 0;
+      return h * 60 + m;
+    }
+    const h24 = t.match(/^(\d{1,2})(?::(\d{2}))?$/);
+    if (h24)
+      return parseInt(h24[1], 10) * 60 + (h24[2] ? parseInt(h24[2], 10) : 0);
+    return 25 * 60;
+  }
   function bloomMark() {
     return `<svg class="bloom-mark" viewBox="0 0 32 32" role="img" aria-label="Bloom">
     <defs><linearGradient id="bm-bg" x1="0" y1="0" x2="1" y2="1">
@@ -91,139 +124,96 @@ if you want to view the source, please visit the github repository of this plugi
   </section>`;
   }
   function homeView(d) {
-    const stat = d.statStrip.map(
-      (s) => {
-        var _a;
-        return `<div class="stat">
-        <div class="s-label">${s.label}</div>
-        <div class="s-value">${s.value}${s.unit ? `<span class="s-unit">${s.unit}</span>` : ""}</div>
-        <div class="s-sub">${(_a = s.sub) != null ? _a : ""}</div>
+    var _a;
+    const t = d.topTask;
+    const card = t ? `<div class="top-task-card ${t.done ? "is-done" : ""}" data-file="${(_a = t.file) != null ? _a : ""}">
+        <div class="ttc-eyebrow">TODAY'S #1</div>
+        <button class="ttc-check ${t.done ? "on" : ""}" id="top-task-check" aria-label="Mark done">
+          ${ICONS.check}
+        </button>
+        <div class="ttc-title">${t.title}</div>
+        ${t.description ? `<div class="ttc-desc">${t.description}</div>` : ""}
+        <div class="ttc-foot">
+          <span class="ttc-source">${t.file ? `\u{1F4DD} ${t.file.split("/").pop()}` : ""}</span>
+          <span class="ttc-more">${d.moreTasksToday > 0 ? `${d.moreTasksToday} more tasks today \u2192` : "All caught up"}</span>
+        </div>
+      </div>` : `<div class="top-task-card placeholder">
+        <div class="ttc-eyebrow">TODAY'S #1</div>
+        <div class="ttc-title muted">No top task set today</div>
+        <div class="ttc-desc">Add <code>topTask: "..."</code> to today's Daily Note frontmatter.</div>
       </div>`;
-      }
-    ).join("");
-    const todayRows = d.todayTasks.map(
-      (t) => {
-        var _a;
-        return `<div class="chk-row ${t.done ? "done" : ""}" data-file="${(_a = t.file) != null ? _a : ""}">
-        <span class="chk ${t.done ? "on" : ""}">${t.done ? "\u2713" : ""}</span>
-        <span class="chk-name">${t.name}</span>
-      </div>`;
-      }
-    ).join("");
-    const projRows = d.projects.map(
-      (p) => `<div class="proj">
-        <div class="proj-top"><span class="proj-name">${p.name}</span><span class="proj-pct">${p.progress}%</span></div>
-        <div class="proj-bar"><div class="proj-fill" style="width:${p.progress}%"></div></div>
-      </div>`
-    ).join("");
-    const flowTiles = d.dailyFlow.map((f) => `<div class="flow-tile"><div class="flow-ico">${f.icon}</div><div class="flow-label">${f.label}</div></div>`).join("");
-    const expCats = d.expenses.categories.map((c) => `<div class="exp-seg" style="width:${c.pct}%;background:${c.color}"></div>`).join("");
-    const expList = d.expenses.categories.map(
-      (c) => `<div class="exp-row"><span class="swatch" style="background:${c.color}"></span>
-        <span class="exp-name">${c.name}</span><span class="exp-amt">\xA5${c.amount.toFixed(2)}</span></div>`
-    ).join("");
-    const wellItems = d.wellness.map(
-      (w) => {
-        var _a;
-        return `<div class="well-item">
-        <div class="well-label" style="color:${(_a = w.color) != null ? _a : "var(--ink)"}">${w.label}</div>
-        <div class="well-value">${w.value}</div>
-        <div class="well-sub">${w.sub}</div>
-      </div>`;
-      }
-    ).join("");
     return `<section class="view" data-view="home">
-    <div class="stat-strip">${stat}</div>
-    <div class="dash-grid">
-      <div class="dash-left">
-        <div class="card">
-          <div class="card-head">
-            <div><div class="t-title">Today's Tasks</div></div>
-            <span class="pill">${d.todayTasks.filter((t) => t.done).length}/${d.todayTasks.length}</span>
-          </div>
-          <div class="chk-list">${todayRows}</div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <div><div class="t-title">Active Projects</div></div>
-            <a class="link" href="#">View all</a>
-          </div>
-          <div class="proj-list">${projRows}</div>
-        </div>
-      </div>
-      <div class="dash-right">
-        <div class="card">
-          <div class="card-head"><div><div class="t-title accent-peach">Daily Flow</div></div></div>
-          <div class="flow">${flowTiles}</div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <div><div class="t-title">Expenses</div></div>
-            <span class="tag-mini">${d.expenses.monthTag}</span>
-          </div>
-          <div class="exp-today">\xA5${d.expenses.today.toFixed(2)} <span>today</span></div>
-          <div class="exp-bar">${expCats}</div>
-          <div class="exp-list">${expList}</div>
-        </div>
-        <div class="card">
-          <div class="card-head"><div><div class="t-title">Wellness</div></div></div>
-          <div class="well">${wellItems}</div>
-        </div>
-        <div class="card lib-card">
-          <div class="lib-item"><span class="lib-num">${d.library.subjects}</span><span class="lib-lbl">subjects</span><span class="lib-cap">Learning</span></div>
-          <div class="lib-item"><span class="lib-num">${d.library.books}</span><span class="lib-lbl">read</span><span class="lib-cap">Books</span></div>
-        </div>
-      </div>
+    <div class="home-wrap">
+      ${card}
     </div>
   </section>`;
   }
-  function calendarView(d) {
-    const c = d.calendar;
-    const lead = (c.firstDayJS + 6) % 7;
+  var MAX_EVENTS_IN_CELL = 4;
+  function eventRow(e) {
+    var _a;
+    const dot = `<span class="cal-ev-dot" style="background:${(_a = e.color) != null ? _a : "#7d8cc4"}"></span>`;
+    const time = e.time ? `<span class="cal-ev-time">${e.time}</span>` : "";
+    return `<div class="cal-ev ${e.kind}">
+    ${dot}${time}<span class="cal-ev-label">${e.label}</span>
+  </div>`;
+  }
+  function holidayBanner(e) {
+    return `<div class="cal-holiday" style="background:#b87b5a">${e.label}</div>`;
+  }
+  function calCellHtml(day, isToday, weekend) {
+    if (!day)
+      return `<div class="cal-cell empty"></div>`;
+    const cls = [
+      "cal-cell",
+      isToday ? "today" : "",
+      weekend ? "weekend" : "",
+      day.events.length ? "has-events" : ""
+    ].filter(Boolean).join(" ");
+    const holiday = day.events.find((e) => e.kind === "holiday");
+    const banner = holiday ? holidayBanner(holiday) : "";
+    const otherEvents = day.events.filter((e) => e.kind !== "holiday");
+    const sorted = [...otherEvents].sort((a, b) => timeToMin(a.time) - timeToMin(b.time));
+    const shown = sorted.slice(0, MAX_EVENTS_IN_CELL);
+    const overflow = sorted.length - shown.length;
+    const overflowHtml = overflow > 0 ? `<div class="cal-ev-more">+${overflow} more</div>` : "";
+    return `<div class="${cls}">
+    <div class="cal-head">
+      <span class="cal-day">${day.day}</span>
+      ${day.lunarLabel ? `<span class="cal-lunar">(${day.lunarLabel})</span>` : ""}
+    </div>
+    ${banner}
+    <div class="cal-events">${shown.map(eventRow).join("")}${overflowHtml}</div>
+  </div>`;
+  }
+  function calendarGridHtml(year, monthIndex, daysInMonth, today, isCurrentMonth, monthEvents) {
+    const lead = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
     const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     let cells = "";
     for (let i = 0; i < lead; i++)
       cells += `<div class="cal-cell empty"></div>`;
-    for (let day = 1; day <= c.daysInMonth; day++) {
-      const isToday = day === c.today;
-      const ev = c.events.find((e) => e.day === day);
-      const cls = ["cal-cell", isToday ? "today" : "", ev ? "event " + ev.kind : ""].filter(Boolean).join(" ");
-      cells += `<div class="${cls}">
-      <span class="cal-day">${day}</span>
-      ${isToday ? '<span class="cal-today">Today</span>' : ""}
-    </div>`;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const jsDow = new Date(year, monthIndex, day).getDay();
+      const weekend = jsDow === 0 || jsDow === 6;
+      const isToday = isCurrentMonth && day === today;
+      const dayMeta = monthEvents[day - 1];
+      cells += calCellHtml(dayMeta, isToday, weekend);
     }
-    const imp = d.importantDates.map(
-      (e) => `<div class="imp-item">
-        <span class="imp-pill" style="background:${e.color}1f;color:${e.color}">${e.date}</span>
-        <span class="imp-title">${e.title}</span>
-      </div>`
-    ).join("");
-    const noteLines = d.todayNote.lines.map((l) => `<div class="tn-line">${l}</div>`).join("");
+    return dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
+  }
+  function calendarView(d) {
+    const c = d.calendar;
+    const grid = calendarGridHtml(c.year, c.monthIndex, c.daysInMonth, c.today, true, d.monthEvents);
     return `<section class="view hidden" data-view="calendar">
     <div class="cal-wrap">
       <div class="cal-main card">
         <div class="cal-top">
+          <button class="cal-today-btn" id="cal-today-btn" title="Jump to today">Today</button>
+          <button class="cal-arrow" data-cal-nav="-1" aria-label="Previous month">${ICONS.chevL}</button>
+          <button class="cal-arrow" data-cal-nav="1" aria-label="Next month">${ICONS.chevR}</button>
           <div class="cal-title">${c.monthLabel}</div>
-          <div class="cal-nav">
-            <button class="cal-arrow" aria-label="Previous month">${ICONS.chevL}</button>
-            <button class="cal-arrow" aria-label="Next month">${ICONS.chevR}</button>
-          </div>
+          <div class="cal-lunar-title" id="cal-lunar-title"></div>
         </div>
-        <div class="cal-grid">
-          ${dow.map((x) => `<div class="cal-dow">${x}</div>`).join("")}
-          ${cells}
-        </div>
-      </div>
-      <div class="cal-side">
-        <div class="card">
-          <div class="card-head"><div><div class="t-title">Important Dates</div></div></div>
-          <div class="imp-list">${imp}</div>
-        </div>
-        <div class="card">
-          <div class="card-head"><div><div class="t-title">${d.todayNote.title}</div></div></div>
-          <div class="tn">${noteLines}</div>
-        </div>
+        <div class="cal-grid" id="cal-grid">${grid}</div>
       </div>
     </div>
   </section>`;
@@ -314,6 +304,7 @@ if you want to view the source, please visit the github repository of this plugi
       (n) => `<button class="nav-item ${n.id === initialView ? "active" : ""}" data-nav="${n.id}">${n.icon}<span>${n.label}</span></button>`
     ).join("");
     const h = (_a = HEADER[initialView]) != null ? _a : HEADER.home;
+    const dateLabel = `${d.todayDate.weekday}, ${d.todayDate.solar}`;
     return `<div class="bloom" id="bloom-root">
     <aside class="bloom-sidebar">
       <div class="brand">${bloomMark()}<div class="brand-text"><b>Bloom</b><span>${d.logoSub}</span></div></div>
@@ -331,7 +322,7 @@ if you want to view the source, please visit the github repository of this plugi
         <div class="hdr-greet">
           <div class="hdr-eyebrow" id="hdr-eyebrow">${h.eyebrow}</div>
           <div class="hdr-name" id="hdr-name">${h.name}</div>
-          <div class="hdr-date" id="hdr-date">${d.dateLabel}</div>
+          <div class="hdr-date" id="hdr-date">${dateLabel}</div>
         </div>
         <div class="header-right">
           <div class="search-box">${ICONS.search}<input id="bloom-search" type="text" placeholder="Search tasks, notes\u2026" /></div>
@@ -354,6 +345,36 @@ if you want to view the source, please visit the github repository of this plugi
     </main>
   </div>`;
   }
+  function newCalNav(d) {
+    return { year: d.calendar.year, monthIndex: d.calendar.monthIndex };
+  }
+  function setCalendarMonth(root, d, nav) {
+    const today = /* @__PURE__ */ new Date();
+    const isCurrentMonth = nav.year === today.getFullYear() && nav.monthIndex === today.getMonth();
+    const lead = (new Date(nav.year, nav.monthIndex, 1).getDay() + 6) % 7;
+    const days = new Date(nav.year, nav.monthIndex + 1, 0).getDate();
+    const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    let cells = "";
+    for (let i = 0; i < lead; i++)
+      cells += `<div class="cal-cell empty"></div>`;
+    for (let day = 1; day <= days; day++) {
+      const jsDow = new Date(nav.year, nav.monthIndex, day).getDay();
+      const weekend = jsDow === 0 || jsDow === 6;
+      const isToday = isCurrentMonth && day === today.getDate();
+      const dayMeta = d.monthEvents[day - 1];
+      cells += calCellHtml(dayMeta, isToday, weekend);
+    }
+    const title = root.querySelector(".cal-title");
+    if (title)
+      title.textContent = `${MONTHS[nav.monthIndex]} ${nav.year}`;
+    const grid = root.querySelector("#cal-grid");
+    if (grid)
+      grid.innerHTML = dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
+  }
+  function shiftCalendarMonth(nav, delta) {
+    const total = nav.year * 12 + nav.monthIndex + delta;
+    return { year: Math.floor(total / 12), monthIndex: (total % 12 + 12) % 12 };
+  }
   function showView(root, id) {
     var _a;
     root.querySelectorAll(".view").forEach((v) => {
@@ -372,12 +393,42 @@ if you want to view the source, please visit the github repository of this plugi
   }
 
   // src/data.ts
+  var ROUTINE_COLOR = "#7d8cc4";
+  var MEDICATION_COLOR = "#b5627c";
+  var BIBLE_COLOR = "#7fb069";
+  function defaultMonthEvents() {
+    const events = [];
+    for (let day = 1; day <= 31; day++) {
+      const dayEvents = [];
+      dayEvents.push({ day, kind: "routine", time: "8pm", label: "Medication (Time Blocking)", color: MEDICATION_COLOR });
+      dayEvents.push({ day, kind: "routine", time: "9pm", label: "Reading", color: ROUTINE_COLOR });
+      if ([1, 3, 5, 8, 10, 12, 15, 17, 19, 22, 24, 26, 29, 31].includes(day)) {
+        dayEvents.push({ day, kind: "routine", time: "7pm", label: "Bible study", color: BIBLE_COLOR });
+      }
+      events.push({ day, events: dayEvents });
+    }
+    events[19].events.push({ day: 20, kind: "task", time: "10am", label: "Dentist appointment", color: "#e8935f" });
+    events[24].events.push({ day: 25, kind: "task", time: "all day", label: "Project deadline", color: "#7d8cc4" });
+    return events;
+  }
   function loadBloomData() {
     return {
       owner: "Candice",
       logoSub: "vault OS",
       planLabel: "Free plan",
       dateLabel: "Sunday, August 16",
+      todayDate: {
+        solar: "Aug 16",
+        weekday: "Sunday",
+        lunar: "\u4E03\u6708\u521D\u4E8C"
+      },
+      topTask: {
+        title: "Cook dinner",
+        description: "Make the chicken stir-fry, set the table, eat before 8pm medication.",
+        file: "11-Todo/Daily Tasks.md",
+        done: false
+      },
+      moreTasksToday: 4,
       statStrip: [
         { label: "Tasks", value: "2/5", sub: "done today" },
         { label: "Weight", value: "50.0", unit: "kg", sub: "0.0 this week" },
@@ -432,18 +483,15 @@ if you want to view the source, please visit the github repository of this plugi
           { name: "Skincare science", category: "Learning", color: "#4f7a3a" }
         ]
       },
+      monthEvents: defaultMonthEvents(),
       calendar: {
         monthLabel: "August 2026",
         year: 2026,
         monthIndex: 7,
         firstDayJS: 6,
-        // Aug 1, 2026 is a Saturday
+        // Aug 1, 2026 is Saturday
         daysInMonth: 31,
-        today: 16,
-        events: [
-          { day: 20, kind: "peach" },
-          { day: 25, kind: "peri" }
-        ]
+        today: 16
       },
       importantDates: [
         { date: "Aug 20", title: "Dentist appointment", color: "#e8935f" },
@@ -476,31 +524,83 @@ if you want to view the source, please visit the github repository of this plugi
   // src/prototype.ts
   var app = document.getElementById("app");
   if (app) {
-    let applyTheme = function(d) {
+    let paint = function(view = "home") {
+      const data = loadBloomData();
+      lastData = data;
+      calNav = newCalNav(data);
+      app.innerHTML = buildShell(data, /* @__PURE__ */ new Date(), view);
+      wire();
+      applyTheme(dark);
+    }, wire = function() {
+      app.querySelectorAll(".nav-item").forEach((btn) => {
+        btn.addEventListener("click", () => showView(app, btn.dataset.nav));
+      });
+      const toggle = app.querySelector("#theme-toggle");
+      toggle == null ? void 0 : toggle.addEventListener("click", () => {
+        dark = !dark;
+        applyTheme(dark);
+      });
+      const search = app.querySelector(".search-box input");
+      search == null ? void 0 : search.addEventListener("input", () => {
+        const q = search.value.trim().toLowerCase();
+        const tasksView2 = app.querySelector('.view[data-view="tasks"]');
+        tasksView2 == null ? void 0 : tasksView2.querySelectorAll(".t-card").forEach((card) => {
+          var _a, _b, _c;
+          const name = (_c = (_b = (_a = card.querySelector(".t-name")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.toLowerCase()) != null ? _c : "";
+          card.style.display = !q || name.includes(q) ? "" : "none";
+        });
+      });
+      const newTask = app.querySelector("#new-task-btn");
+      newTask == null ? void 0 : newTask.addEventListener("click", () => {
+        var _a, _b, _c;
+        const name = window.prompt("New task name:");
+        if (!name || !name.trim() || !lastData)
+          return;
+        const safe = name.trim().replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+        lastData.tasks.todo.push({ name, category: "Daily", color: "#b5627c" });
+        const todoBody = app.querySelector('.board-col[data-col="todo"] .board-col-body');
+        if (todoBody) {
+          const card = document.createElement("div");
+          card.className = "t-card";
+          card.innerHTML = `<span class="t-tag" style="color:#b5627c">Daily</span><div class="t-name">${safe}</div>`;
+          todoBody.appendChild(card);
+        }
+        const todoCol = app.querySelector('.board-col[data-col="todo"]');
+        const todoCount = (_b = (_a = todoCol == null ? void 0 : todoCol.querySelector(".board-col-body")) == null ? void 0 : _a.children.length) != null ? _b : 0;
+        (_c = todoCol == null ? void 0 : todoCol.querySelector(".col-count")) == null ? void 0 : _c.replaceChildren(document.createTextNode(String(todoCount)));
+      });
+      const topCheck = app.querySelector("#top-task-check");
+      topCheck == null ? void 0 : topCheck.addEventListener("click", () => {
+        const card = app.querySelector(".top-task-card");
+        if (!card)
+          return;
+        const done = card.classList.toggle("is-done");
+        topCheck.classList.toggle("on", done);
+      });
+      app.querySelectorAll("[data-cal-nav]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const dir = parseInt(btn.getAttribute("data-cal-nav") || "0", 10);
+          if (!dir || !lastData)
+            return;
+          calNav = shiftCalendarMonth(calNav, dir);
+          setCalendarMonth(app, lastData, calNav);
+        });
+      });
+      const todayBtn = app.querySelector("#cal-today-btn");
+      todayBtn == null ? void 0 : todayBtn.addEventListener("click", () => {
+        if (!lastData)
+          return;
+        calNav = newCalNav(lastData);
+        setCalendarMonth(app, lastData, calNav);
+      });
+    }, applyTheme = function(d) {
       root == null ? void 0 : root.classList.toggle("theme-dark", d);
       localStorage.setItem("bloom-dark", d ? "1" : "0");
     };
-    app.innerHTML = buildShell(loadBloomData(), /* @__PURE__ */ new Date(), "home");
+    let calNav = { year: 2026, monthIndex: 7 };
+    let lastData = null;
     let dark = localStorage.getItem("bloom-dark") === "1";
     const root = app.querySelector(".bloom");
-    applyTheme(dark);
-    app.querySelectorAll(".nav-item").forEach((btn) => {
-      btn.addEventListener("click", () => showView(app, btn.dataset.nav));
-    });
-    const toggle = app.querySelector("#theme-toggle");
-    toggle == null ? void 0 : toggle.addEventListener("click", () => {
-      dark = !dark;
-      applyTheme(dark);
-    });
-    const search = app.querySelector(".search-box input");
-    search == null ? void 0 : search.addEventListener("input", () => {
-      const q = search.value.trim().toLowerCase();
-      const tasksView2 = app.querySelector('.view[data-view="tasks"]');
-      tasksView2 == null ? void 0 : tasksView2.querySelectorAll(".t-card").forEach((card) => {
-        var _a, _b, _c;
-        const name = (_c = (_b = (_a = card.querySelector(".t-name")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.toLowerCase()) != null ? _c : "";
-        card.style.display = !q || name.includes(q) ? "" : "none";
-      });
-    });
+    paint("home");
   }
 })();

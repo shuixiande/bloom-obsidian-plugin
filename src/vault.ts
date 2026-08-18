@@ -4,17 +4,29 @@
    Every read is wrapped in try/catch so a missing/renamed file degrades
    gracefully to the static value rather than blanking the dashboard.
 
-   This module imports `obsidian` and is pulled in ONLY by main.ts, so it is
-   compiled into main.js and never into the browser prototype.js.
+   This module imports `obsidian` AND `lunar-typescript` and is pulled in ONLY
+   by main.ts, so it is compiled into main.js and never into the browser
+   prototype.js.
    ========================================================================= */
 import { App } from "obsidian";
+// @ts-ignore — lunar-typescript ships its own d.ts but esbuild is strict
+import { Solar, HolidayUtil } from "lunar-typescript";
 import { loadBloomData } from "./data";
-import type { BloomData, Task, CalEvent, ImportantDate, ExpenseCategory } from "./data";
+import type {
+  BloomData,
+  Task,
+  CalEvent,
+  DayMeta,
+  TopTask,
+  ImportantDate,
+  ExpenseCategory,
+} from "./data";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const EXPENSE_COLORS: Record<string, string> = {
   Food: "#d9a340",
@@ -27,6 +39,9 @@ const EXPENSE_COLORS: Record<string, string> = {
   Other: "var(--accent)",
 };
 
+// Default palette for color dots in schedule rows when "Color" column is empty.
+const DEFAULT_DOT_COLOR = "#7d8cc4"; // periwinkle
+
 /* ----------------------------- markdown utils -------------------------- */
 function stripCode(md: string): string {
   return md.replace(/```[\s\S]*?```/g, "");
@@ -37,7 +52,7 @@ function readTable(block: string): string[][] {
   for (const line of block.split("\n")) {
     const t = line.trim();
     if (!t.startsWith("|")) continue;
-    if (/^\|[\s:-]+\|$/.test(t)) continue; // separator row
+    if (/^\|[\s:-]+\|$/.test(t)) continue;
     rows.push(t.split("|").slice(1, -1).map((c) => c.trim()));
   }
   return rows;
@@ -53,6 +68,22 @@ function tablesAfter(md: string, header: string): string[][] {
   return readTable(block);
 }
 
+/** Frontmatter key/value map from a markdown file. */
+function parseFrontmatter(md: string): Record<string, string> {
+  const m = md.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return {};
+  const out: Record<string, string> = {};
+  for (const line of m[1].split("\n")) {
+    const kv = line.match(/^([\w-]+):\s*(.*)$/);
+    if (!kv) continue;
+    let v = kv[2].trim();
+    // strip surrounding quotes
+    v = v.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+    out[kv[1]] = v;
+  }
+  return out;
+}
+
 function fmtISO(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -63,6 +94,50 @@ function fmtShort(iso: string): string {
   const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return iso;
   return `${MONTHS[parseInt(m[2], 10) - 1].slice(0, 3)} ${parseInt(m[3], 10)}`;
+}
+
+/** Map a color emoji or name to a CSS color. */
+function emojiToColor(emoji: string | undefined): string | undefined {
+  if (!emoji) return undefined;
+  const e = emoji.trim();
+  if (/🟣|💜|purple/i.test(e)) return "#7d8cc4"; // periwinkle
+  if (/🔵|💙|blue/i.test(e)) return "#5ca3a1";   // teal
+  if (/🟢|💚|green/i.test(e)) return "#7fb069";  // sage
+  if (/🟡|💛|yellow|gold/i.test(e)) return "#d9a340";
+  if (/🟠|🟧|orange|peach/i.test(e)) return "#e8935f";
+  if (/🔴|❤️|red|pink/i.test(e)) return "#e07a9c";
+  if (/⚫|⚪|black|gray/i.test(e)) return "#5a5660";
+  return DEFAULT_DOT_COLOR;
+}
+
+/** Compute lunar label for a solar date, e.g. "廿三" / "初一". */
+function lunarLabelFor(y: number, m1: number, d: number): string {
+  try {
+    const solar = Solar.fromYmd(y, m1 + 1, d); // lunar lib is 1-based month
+    const lunar = solar.getLunar();
+    return lunar.getDayInChinese();
+  } catch {
+    return "";
+  }
+}
+
+function lunarMonthLabelFor(y: number, m1: number): string {
+  try {
+    const solar = Solar.fromYmd(y, m1 + 1, 1);
+    return solar.getLunar().getMonthInChinese();
+  } catch {
+    return "";
+  }
+}
+
+/** Public holiday name for a solar date ("教师节", "国庆节", ...). */
+function holidayNameFor(y: number, m1: number, d: number): string | null {
+  try {
+    const h = HolidayUtil.getHoliday(y, m1 + 1, d);
+    return h && h.isWork() === false ? h.getName() : null;
+  } catch {
+    return null;
+  }
 }
 
 type RawTask = { name: string; done: boolean; category: Task["category"] };
@@ -113,6 +188,21 @@ function parseProjects(md: string): { name: string; progress: number }[] {
       if (pm) { progress = parseInt(pm[1], 10); break; }
     }
     out.push({ name, progress });
+  }
+  return out;
+}
+
+/** Parse the per-day `## ⏰ Schedule` table into CalEvent[]. */
+function parseSchedule(md: string): CalEvent[] {
+  const out: CalEvent[] = [];
+  const rows = tablesAfter(md, "## ⏰ Schedule");
+  for (const r of rows) {
+    const time = r[0] || "";
+    const label = r[1] || "";
+    if (!label) continue;
+    if (/^(time|Time)$/i.test(time)) continue; // header row
+    const color = emojiToColor(r[2]);
+    out.push({ day: 0, kind: "task", time, label, color });
   }
   return out;
 }
@@ -216,22 +306,57 @@ export async function loadBloomDataLive(app: App): Promise<BloomData> {
     }
   }
 
-  /* ---- Calendar: month grid + important dates + today note ---- */
+  /* ---- Top Task from today's Daily Note frontmatter ---- */
+  const todayISO = fmtISO(now);
+  const dn = await read(`12-Calendar/Daily Notes/${todayISO}.md`);
+  if (dn) {
+    const fm = parseFrontmatter(dn);
+    if (fm["topTask"]) {
+      d.topTask = { title: fm["topTask"], file: `12-Calendar/Daily Notes/${todayISO}.md`, done: false };
+    }
+  }
+  if (!d.topTask) {
+    // Fallback: first unchecked Daily Task
+    const first = rawDaily.find((t) => !t.done);
+    if (first) d.topTask = { title: first.name, file: "11-Todo/Daily Tasks.md", done: false };
+  }
+  d.moreTasksToday = rawDaily.filter((t) => !t.done).length - 1;
+
+  /* ---- Calendar grid + month events ---- */
   const year = now.getFullYear();
   const monthIndex = now.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   d.calendar = {
     monthLabel: `${MONTHS[monthIndex]} ${year}`,
     year,
     monthIndex,
     firstDayJS: new Date(year, monthIndex, 1).getDay(),
-    daysInMonth: new Date(year, monthIndex + 1, 0).getDate(),
+    daysInMonth,
     today: now.getDate(),
-    events: d.calendar.events,
   };
+
+  // Build monthEvents: lunar label + scheduled events from each day's Daily Note
+  const monthEvents: DayMeta[] = [];
+  for (let d1 = 1; d1 <= daysInMonth; d1++) {
+    const date = new Date(year, monthIndex, d1);
+    const iso = fmtISO(date);
+    const dayMd = await read(`12-Calendar/Daily Notes/${iso}.md`);
+    const events: CalEvent[] = [];
+    // Public holidays (Chinese) from lunar-typescript — adds as banner-style event
+    const hol = holidayNameFor(year, monthIndex, d1);
+    if (hol) events.push({ day: d1, kind: "holiday", label: hol, color: "#b87b5a" });
+    // Per-day Schedule table
+    if (dayMd) {
+      for (const e of parseSchedule(dayMd)) {
+        events.push({ ...e, day: d1 });
+      }
+    }
+    monthEvents.push({ day: d1, lunarLabel: lunarLabelFor(year, monthIndex, d1), events });
+  }
+  // Important Dates from Monthly Calendar.md
   const cal = await read("12-Calendar/Monthly Calendar.md");
   if (cal) {
     const rows = tablesAfter(cal, "## Important Dates");
-    const events: CalEvent[] = [];
     const imp: ImportantDate[] = [];
     const palette = ["#e8935f", "#7d8cc4", "#7fb069", "#e07a9c"];
     rows.forEach((r) => {
@@ -241,15 +366,24 @@ export async function loadBloomDataLive(app: App): Promise<BloomData> {
       const dm = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
       if (!dm) return;
       const day = parseInt(dm[3], 10);
-      events.push({ day, kind: /doctor|appointment|预约|医生/.test(title) ? "peri" : "peach" });
+      // Insert as task kind (rendered as colored dot, not banner)
+      const target = monthEvents[day - 1];
+      if (target) {
+        target.events.push({
+          day,
+          kind: /doctor|appointment|预约|医生/i.test(title) ? "task" : "task",
+          time: "all day",
+          label: title,
+          color: palette[imp.length % palette.length],
+        });
+      }
       imp.push({ date: fmtShort(dateStr), title, color: palette[imp.length % palette.length] });
     });
-    if (events.length) d.calendar.events = events;
     if (imp.length) d.importantDates = imp;
   }
+  d.monthEvents = monthEvents;
 
-  /* ---- Daily note -> Today Note card ---- */
-  const dn = await read(`12-Calendar/Daily Notes/${fmtISO(now)}.md`);
+  /* ---- Today Note card ---- */
   if (dn) {
     const lines: string[] = [];
     const wM = dn.match(/weight:\s*"(\d+(?:\.\d+)?)"/i) ?? dn.match(/\|\s*Weight \(kg\)\s*\|\s*(\d+(?:\.\d+)?)\s*\|/);
@@ -264,7 +398,7 @@ export async function loadBloomDataLive(app: App): Promise<BloomData> {
     if (!isNaN(weight)) lines.push(`Weight ${weight} kg${mood ? " · Mood: " + mood : ""}`);
     const totalM = dn.match(/\|\s*\*\*Total\*\*\s*\|[^|]*\|\s*\*\*(\d+(?:\.\d+)?)\*\*/);
     if (totalM) lines.push(`Expenses: ¥${totalM[1]}`);
-    if (lines.length) d.todayNote = { title: `Daily Note · ${fmtShort(fmtISO(now))}`, lines };
+    if (lines.length) d.todayNote = { title: `Daily Note · ${fmtShort(todayISO)}`, lines };
   }
 
   /* ---- Library: subjects + books ---- */
@@ -280,6 +414,13 @@ export async function loadBloomDataLive(app: App): Promise<BloomData> {
     ).length;
     if (count > 0) d.library.books = count;
   }
+
+  /* ---- Today date ---- */
+  d.todayDate = {
+    solar: `${MONTHS[now.getMonth()].slice(0, 3)} ${now.getDate()}`,
+    weekday: WEEKDAYS[now.getDay()],
+    lunar: `${lunarMonthLabelFor(year, monthIndex)}${lunarLabelFor(year, monthIndex, now.getDate())}`,
+  };
 
   return d;
 }

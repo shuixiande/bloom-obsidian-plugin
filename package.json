@@ -1,6 +1,6 @@
 {
   "name": "bloom",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Soft pastel Obsidian dashboard plugin",
   "main": "main.js",
   "scripts": {
@@ -13,5 +13,8 @@
     "obsidian": "^1.4.0",
     "tslib": "^2.6.0",
     "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "lunar-typescript": "^1.8.6"
   }
 }
