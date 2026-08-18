@@ -1,7 +1,7 @@
 {
   "id": "bloom",
   "name": "Bloom",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "minAppVersion": "0.15.0",
   "description": "A soft, pastel daily dashboard for your vault — Dashboard, Tasks, Calendar, and Trackers in one calm view.",
   "author": "Candice",

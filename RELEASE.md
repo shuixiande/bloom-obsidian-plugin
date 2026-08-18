@@ -1,3 +1,24 @@
+# Bloom v0.1.3 — Release Notes
+
+**Released:** 2026-08-18
+**Tag:** `v0.1.3`
+**Status:** Layout polish + usage guide
+
+## What's in this release
+- **Calendar left-aligned + full month on one screen.**
+  - Calendar no longer sits centered with big empty side margins — it left-aligns to the main area and spans the full width (the 1080px content cap is dropped on this view only).
+  - Row height compacted (`minmax(160px,auto)` → `minmax(96px,auto)`) so all 6 week rows + header fit without page scrolling.
+  - Fixed the big gap above day 1–2: the weekday header row was being stretched to 96px by `grid-auto-rows`; it is now auto-height and hugs the date cells.
+- **Task board per-column scrollbar.** `.board` height is capped and `.board-col-body` scrolls internally, so a long To Do column gets its own scrollbar while the column header stays fixed — the page no longer stretches.
+- **Usage guide added:** `使用说明.md` (Chinese) covering install, navigation, per-view usage, data conventions and FAQ.
+- **Holiday banners extended:** non-statutory observances (教师节, 妇女节, 儿童节, 圣诞节, …) now show copper banners like statutory holidays.
+- **Table parser fix:** multi-column separator rows (e.g. the 4-column `⏰ Schedule` table) are no longer mistaken for data rows.
+
+## Upgrade
+Replace `main.js`, `styles.css`, and `manifest.json` in your plugin folder, then reload Obsidian. See `使用说明.md` for the full manual.
+
+---
+
 # Bloom v0.1.2 — Release Notes
 
 **Released:** 2026-08-18
