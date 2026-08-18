@@ -378,14 +378,17 @@
 .bloom .cal-today-btn:hover { filter: brightness(0.96); }
 
 /* Grid: 7 cols (Mon..Sun), 6 rows. Cells are vertical day cards.
-   Compact row height so the whole month fits without page scrolling. */
+   Compact row height so the whole month fits without page scrolling.
+   Row 1 (the weekday header) is auto-height; the 6 day rows use 96px. */
 .bloom .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto;
   grid-auto-rows: minmax(96px, auto);
   gap: 6px;
 }
 .bloom .cal-dow {
+  align-self: start;
   text-align: center; font-size: 11px; font-weight: 600;
   color: var(--text-faint); padding-bottom: 3px;
 }
