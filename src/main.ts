@@ -17,6 +17,7 @@ import { loadBloomDataLive } from "./vault";
 import { loadBloomData } from "./data";
 import type { BloomData } from "./data";
 import { BloomSettingsModal } from "./settings";
+import { NewTaskModal } from "./task-modal";
 
 export const VIEW_TYPE_BLOOM = "bloom-view";
 
@@ -179,10 +180,16 @@ export class BloomView extends ItemView {
     });
   }
 
-  private async addTask() {
-    const name = window.prompt("New task name:");
-    if (!name || !name.trim()) return;
+  private addTask() {
+    // window.prompt() is blocked inside Obsidian's iframe sandbox (1.6+),
+    // so we use a proper modal with a text field instead.
+    new NewTaskModal(this.app, (name) => this.createTask(name)).open();
+  }
+
+  /** Append `- [ ] name` to Daily Tasks.md, then live-update the board. */
+  private async createTask(name: string) {
     const task = name.trim();
+    if (!task) return;
     try {
       const content = await this.app.vault.adapter.read(TODO_FILE);
       const appended = content.replace(/\s*$/, "") + "\n- [ ] " + task + "\n";

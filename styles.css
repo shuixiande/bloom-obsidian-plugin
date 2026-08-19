@@ -641,3 +641,17 @@
   font-family: "Inter", ui-monospace, monospace;
 }
 .bloom-settings .bs-foot { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 16px; justify-content: flex-end; }
+
+/* ------------------------------ NEW TASK MODAL --------------------------- */
+.bloom-task-modal { display: block; height: auto; overflow: visible; padding: 4px 2px 8px; }
+.bloom-task-modal .bs-row { display: flex; align-items: center; gap: 12px; }
+.bloom-task-modal .bs-input {
+  flex: 1 1 auto; min-width: 0;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-card); color: var(--ink-strong);
+  padding: 9px 12px; font-size: 14px; font-family: inherit;
+}
+.bloom-task-modal .bs-input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(242, 160, 181, 0.25);
+}

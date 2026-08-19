@@ -33,7 +33,7 @@ __export(main_exports, {
   default: () => BloomPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/dashboard.ts
 var ICONS = {
@@ -12329,6 +12329,61 @@ var BloomSettingsModal = class extends import_obsidian.Modal {
   }
 };
 
+// src/task-modal.ts
+var import_obsidian2 = require("obsidian");
+var NewTaskModal = class extends import_obsidian2.Modal {
+  constructor(app, onConfirm) {
+    super(app);
+    this.onConfirm = onConfirm;
+    __publicField(this, "input");
+    __publicField(this, "submitted", false);
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    const wrap = contentEl.createDiv({ cls: "bloom bloom-settings bloom-task-modal" });
+    wrap.createEl("h3", { text: "New task", cls: "bs-title" });
+    wrap.createEl("div", {
+      text: "The task will be added to your Daily Tasks list.",
+      cls: "bs-note"
+    });
+    const row = wrap.createDiv({ cls: "bs-row" });
+    row.createSpan({ text: "Task name", cls: "bs-label" });
+    this.input = new import_obsidian2.TextComponent(row).setPlaceholder("e.g. Water the plants").setValue("").onChange(() => {
+    });
+    this.input.inputEl.addClass("bs-input");
+    this.input.inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.submit();
+      }
+    });
+    window.setTimeout(() => {
+      this.input.inputEl.focus();
+    }, 50);
+    const foot = wrap.createDiv({ cls: "bs-row bs-foot" });
+    const cancel = foot.createEl("button", { text: "Cancel", cls: "bs-btn" });
+    cancel.addEventListener("click", () => this.close());
+    const add = foot.createEl("button", { text: "+ Add task", cls: "bs-btn bs-primary" });
+    add.addEventListener("click", () => this.submit());
+  }
+  submit() {
+    const name = this.input.getValue().trim();
+    if (!name) {
+      new import_obsidian2.Notice("Bloom: task name can't be empty");
+      return;
+    }
+    this.submitted = true;
+    this.onConfirm(name);
+    this.close();
+  }
+  onClose() {
+    if (!this.submitted) {
+    }
+    this.contentEl.empty();
+  }
+};
+
 // src/main.ts
 var VIEW_TYPE_BLOOM = "bloom-view";
 var DEFAULT_SETTINGS = { dark: false, defaultView: "home" };
@@ -12339,7 +12394,7 @@ function esc(s) {
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
   );
 }
-var BloomView = class extends import_obsidian2.ItemView {
+var BloomView = class extends import_obsidian3.ItemView {
   constructor(leaf, settings) {
     super(leaf);
     __publicField(this, "currentView", "home");
@@ -12466,19 +12521,22 @@ var BloomView = class extends import_obsidian2.ItemView {
       card.style.display = !q || name.includes(q) ? "" : "none";
     });
   }
-  async addTask() {
+  addTask() {
+    new NewTaskModal(this.app, (name) => this.createTask(name)).open();
+  }
+  /** Append `- [ ] name` to Daily Tasks.md, then live-update the board. */
+  async createTask(name) {
     var _a, _b, _c;
-    const name = window.prompt("New task name:");
-    if (!name || !name.trim())
-      return;
     const task = name.trim();
+    if (!task)
+      return;
     try {
       const content = await this.app.vault.adapter.read(TODO_FILE);
       const appended = content.replace(/\s*$/, "") + "\n- [ ] " + task + "\n";
       await this.app.vault.adapter.write(TODO_FILE, appended);
     } catch (e) {
       console.error("[Bloom] addTask write failed:", e);
-      new import_obsidian2.Notice("Bloom: could not save new task");
+      new import_obsidian3.Notice("Bloom: could not save new task");
       return;
     }
     const todoBody = this.containerEl.querySelector('.board-col[data-col="todo"] .board-col-body');
@@ -12492,7 +12550,7 @@ var BloomView = class extends import_obsidian2.ItemView {
     const todoCount = (_b = (_a = todoCol == null ? void 0 : todoCol.querySelector(".board-col-body")) == null ? void 0 : _a.children.length) != null ? _b : 0;
     (_c = todoCol == null ? void 0 : todoCol.querySelector(".col-count")) == null ? void 0 : _c.replaceChildren(document.createTextNode(String(todoCount)));
     this.refreshBoardSub();
-    new import_obsidian2.Notice("Bloom: task added to Daily Tasks");
+    new import_obsidian3.Notice("Bloom: task added to Daily Tasks");
   }
   /** Mark the home "today's #1" task complete: flip the visual + write back to source file. */
   async toggleTopTask() {
@@ -12519,10 +12577,10 @@ var BloomView = class extends import_obsidian2.ItemView {
         }
       }
       await this.app.vault.adapter.write(file, lines.join("\n"));
-      new import_obsidian2.Notice(nextDone ? "Bloom: #1 marked done" : "Bloom: #1 reopened");
+      new import_obsidian3.Notice(nextDone ? "Bloom: #1 marked done" : "Bloom: #1 reopened");
     } catch (e) {
       console.error("[Bloom] toggleTopTask write failed:", e);
-      new import_obsidian2.Notice("Bloom: could not save #1 state (Daily Note may not exist)");
+      new import_obsidian3.Notice("Bloom: could not save #1 state (Daily Note may not exist)");
     }
   }
   refreshBoardSub() {
@@ -12538,7 +12596,7 @@ var BloomView = class extends import_obsidian2.ItemView {
     sub.textContent = `${open} open \xB7 ${done} done today`;
   }
 };
-var BloomPlugin = class extends import_obsidian2.Plugin {
+var BloomPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
     __publicField(this, "settings", DEFAULT_SETTINGS);
@@ -12571,11 +12629,11 @@ var BloomPlugin = class extends import_obsidian2.Plugin {
           this.saveSettings();
         }
       });
-      new import_obsidian2.Notice("Bloom dashboard ready \u2014 click the dashboard icon in the left ribbon.");
+      new import_obsidian3.Notice("Bloom dashboard ready \u2014 click the dashboard icon in the left ribbon.");
       console.log("[Bloom] onload complete");
     } catch (e) {
       console.error("[Bloom] onload failed:", e);
-      new import_obsidian2.Notice("Bloom failed to load: " + (e instanceof Error ? e.message : String(e)));
+      new import_obsidian3.Notice("Bloom failed to load: " + (e instanceof Error ? e.message : String(e)));
     }
   }
   async activateView() {
