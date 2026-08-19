@@ -4,6 +4,12 @@ if you want to view the source, please visit the github repository of this plugi
 */
 (() => {
   // src/dashboard.ts
+  function esc(s) {
+    return s.replace(
+      /[&<>"']/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+    );
+  }
   var ICONS = {
     home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>`,
     today: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>`,
@@ -261,7 +267,10 @@ if you want to view the source, please visit the github repository of this plugi
         <div class="card">
           <div class="card-head">
             <div><div class="t-title">Expense Overview</div><div class="t-sub">${e.month}</div></div>
-            <div class="t-value small">\xA5${e.total.toFixed(2)}</div>
+            <div class="card-head-actions">
+              <div class="t-value small">\xA5${e.total.toFixed(2)}</div>
+              <button class="btn-sm" id="add-expense-btn" title="Add an expense">+ Add</button>
+            </div>
           </div>
           ${donut(e.categories, e.total, e.month)}
         </div>
@@ -296,6 +305,47 @@ if you want to view the source, please visit the github repository of this plugi
       <div class="ph-title">${title}</div>
       <div class="ph-sub">Part of the Bloom design \u2014 wiring this section to your vault is the next step.</div>
     </div>
+  </section>`;
+  }
+  function booksView(d) {
+    const total = d.books.reduce((n, s) => n + s.items.length, 0);
+    const sections = d.books.length ? d.books.map((sec) => {
+      const rows = sec.items.map(
+        (b) => `<div class="book-row">
+                <div class="book-title">${esc(b.title)}</div>
+                <div class="book-meta">
+                  ${b.author ? `<span>${esc(b.author)}</span>` : ""}
+                  ${b.status ? `<span class="book-status">${esc(b.status)}</span>` : ""}
+                </div>
+              </div>`
+      ).join("");
+      return `<div class="book-cat">
+            <div class="book-cat-head">${esc(sec.category)}</div>
+            <div class="book-list">${rows}</div>
+          </div>`;
+    }).join("") : `<div class="ph-sub">No books yet \u2014 add your first one.</div>`;
+    return `<section class="view hidden" data-view="books">
+    <div class="board-head">
+      <div><div class="board-title">Books</div><div class="board-sub">${total} on your shelf</div></div>
+      <button class="btn-primary" id="add-book-btn">+ Add book</button>
+    </div>
+    <div class="books-wrap">${sections}</div>
+  </section>`;
+  }
+  function learningView(d) {
+    const open = d.studyTasks.filter((t) => !t.done).length;
+    const items = d.studyTasks.length ? d.studyTasks.map(
+      (t) => `<div class="chk-row ${t.done ? "done" : ""}" data-name="${esc(t.name)}">
+            <span class="chk ${t.done ? "on" : ""}"></span>
+            <span class="chk-name">${esc(t.name)}</span>
+          </div>`
+    ).join("") : `<div class="ph-sub">No study tasks for today \u2014 add one.</div>`;
+    return `<section class="view hidden" data-view="learning">
+    <div class="board-head">
+      <div><div class="board-title">Learning</div><div class="board-sub">${open} to study</div></div>
+      <button class="btn-primary" id="add-study-btn">+ Add study task</button>
+    </div>
+    <div class="card"><div class="chk-list">${items}</div></div>
   </section>`;
   }
   function buildShell(d, _now, initialView = "home") {
@@ -338,8 +388,8 @@ if you want to view the source, please visit the github repository of this plugi
         ${calendarView(d)}
         ${trackersView(d)}
         ${placeholderView("today", "Today")}
-        ${placeholderView("learning", "Learning")}
-        ${placeholderView("books", "Books")}
+        ${learningView(d)}
+        ${booksView(d)}
         ${placeholderView("projects", "Projects")}
       </div></div>
     </main>
@@ -487,6 +537,8 @@ if you want to view the source, please visit the github repository of this plugi
         ]
       },
       monthEvents: defaultMonthEvents(),
+      books: [],
+      studyTasks: [],
       calendar: {
         monthLabel: "August 2026",
         year: 2026,

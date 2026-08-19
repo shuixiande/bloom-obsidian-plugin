@@ -6,6 +6,13 @@
    ========================================================================= */
 import type { BloomData, Task, ExpenseCategory, CalEvent, DayMeta } from "./data";
 
+/** Minimal HTML escape for user-supplied strings rendered into markup. */
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string)
+  );
+}
+
 export const ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>`,
   today: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>`,
@@ -102,7 +109,7 @@ const BOARD_COLS = [
   { key: "done", title: "Done", dot: "var(--c-sage)", tint: "#f0f7ee", countBg: "#eaf4ea", countFg: "#4f7a3a" },
 ] as const;
 
-function tasksView(d: BloomData): string {
+export function tasksView(d: BloomData): string {
   const open = d.tasks.todo.length + d.tasks.doing.length;
   const cols = BOARD_COLS.map((c) => {
     const list = d.tasks[c.key as "todo" | "doing" | "done"].map(taskCard).join("");
@@ -271,7 +278,7 @@ function donut(cats: ExpenseCategory[], total: number, month: string): string {
   </div>`;
 }
 
-function trackersView(d: BloomData): string {
+export function trackersView(d: BloomData): string {
   const w = d.trackers.weight;
   const p = d.trackers.period;
   const e = d.trackers.expense;
@@ -291,7 +298,10 @@ function trackersView(d: BloomData): string {
         <div class="card">
           <div class="card-head">
             <div><div class="t-title">Expense Overview</div><div class="t-sub">${e.month}</div></div>
-            <div class="t-value small">¥${e.total.toFixed(2)}</div>
+            <div class="card-head-actions">
+              <div class="t-value small">¥${e.total.toFixed(2)}</div>
+              <button class="btn-sm" id="add-expense-btn" title="Add an expense">+ Add</button>
+            </div>
           </div>
           ${donut(e.categories, e.total, e.month)}
         </div>
@@ -328,6 +338,62 @@ function placeholderView(id: string, title: string): string {
       <div class="ph-title">${title}</div>
       <div class="ph-sub">Part of the Bloom design — wiring this section to your vault is the next step.</div>
     </div>
+  </section>`;
+}
+
+/* ------------------------------- BOOKS ---------------------------------- */
+export function booksView(d: BloomData): string {
+  const total = d.books.reduce((n, s) => n + s.items.length, 0);
+  const sections = d.books.length
+    ? d.books
+        .map((sec) => {
+          const rows = sec.items
+            .map(
+              (b) => `<div class="book-row">
+                <div class="book-title">${esc(b.title)}</div>
+                <div class="book-meta">
+                  ${b.author ? `<span>${esc(b.author)}</span>` : ""}
+                  ${b.status ? `<span class="book-status">${esc(b.status)}</span>` : ""}
+                </div>
+              </div>`
+            )
+            .join("");
+          return `<div class="book-cat">
+            <div class="book-cat-head">${esc(sec.category)}</div>
+            <div class="book-list">${rows}</div>
+          </div>`;
+        })
+        .join("")
+    : `<div class="ph-sub">No books yet — add your first one.</div>`;
+  return `<section class="view hidden" data-view="books">
+    <div class="board-head">
+      <div><div class="board-title">Books</div><div class="board-sub">${total} on your shelf</div></div>
+      <button class="btn-primary" id="add-book-btn">+ Add book</button>
+    </div>
+    <div class="books-wrap">${sections}</div>
+  </section>`;
+}
+
+/* ------------------------------ LEARNING -------------------------------- */
+/** Study tasks (Today's Study) as a checkable list + add button. */
+export function learningView(d: BloomData): string {
+  const open = d.studyTasks.filter((t) => !t.done).length;
+  const items = d.studyTasks.length
+    ? d.studyTasks
+        .map(
+          (t) => `<div class="chk-row ${t.done ? "done" : ""}" data-name="${esc(t.name)}">
+            <span class="chk ${t.done ? "on" : ""}"></span>
+            <span class="chk-name">${esc(t.name)}</span>
+          </div>`
+        )
+        .join("")
+    : `<div class="ph-sub">No study tasks for today — add one.</div>`;
+  return `<section class="view hidden" data-view="learning">
+    <div class="board-head">
+      <div><div class="board-title">Learning</div><div class="board-sub">${open} to study</div></div>
+      <button class="btn-primary" id="add-study-btn">+ Add study task</button>
+    </div>
+    <div class="card"><div class="chk-list">${items}</div></div>
   </section>`;
 }
 
@@ -374,8 +440,8 @@ export function buildShell(d: BloomData, _now: Date, initialView = "home"): stri
         ${calendarView(d)}
         ${trackersView(d)}
         ${placeholderView("today", "Today")}
-        ${placeholderView("learning", "Learning")}
-        ${placeholderView("books", "Books")}
+        ${learningView(d)}
+        ${booksView(d)}
         ${placeholderView("projects", "Projects")}
       </div></div>
     </main>

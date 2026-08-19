@@ -309,6 +309,33 @@
 }
 .btn-primary:hover { filter: brightness(0.96); }
 
+/* small inline "+ Add" button (e.g. expense card in Trackers) */
+.card-head-actions { display: flex; align-items: center; gap: 10px; }
+.btn-sm {
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 10px;
+  cursor: pointer; transition: filter 0.15s ease; flex: 0 0 auto;
+}
+.btn-sm:hover { filter: brightness(0.96); }
+
+/* -------------------------------- BOOKS --------------------------------- */
+.books-wrap { display: flex; flex-direction: column; gap: 16px; }
+.book-cat {
+  background: var(--surface-card); border: 1px solid var(--line);
+  border-radius: var(--radius-card); padding: 16px 18px; box-shadow: var(--shadow-card);
+}
+.book-cat-head { font-size: 14px; font-weight: 600; color: var(--ink-strong); margin-bottom: 6px; }
+.book-list { display: flex; flex-direction: column; }
+.book-row { display: flex; flex-direction: column; gap: 2px; padding: 9px 2px; border-top: 1px solid var(--line); }
+.book-row:first-child { border-top: none; }
+.book-title { font-size: 14px; font-weight: 500; color: var(--ink-strong); }
+.book-meta { display: flex; gap: 10px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+.book-status { color: var(--c-peach); font-weight: 600; }
+
+/* ------------------------------ ENTRY MODAL ----------------------------- */
+.bloom-entry-modal .bs-field { flex: 1 1 auto; min-width: 0; display: flex; }
+.bloom-entry-modal .bs-field select.dropdown { width: 100%; }
+
 .bloom .board {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
   align-items: stretch;

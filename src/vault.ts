@@ -20,6 +20,9 @@ import type {
   TopTask,
   ImportantDate,
   ExpenseCategory,
+  BookSection,
+  BookItem,
+  StudyTaskItem,
 } from "./data";
 
 const MONTHS = [
@@ -28,7 +31,7 @@ const MONTHS = [
 ];
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const EXPENSE_COLORS: Record<string, string> = {
+export const EXPENSE_COLORS: Record<string, string> = {
   Food: "#d9a340",
   Shopping: "#e8935f",
   Transport: "#5ca3a1",
@@ -38,6 +41,10 @@ const EXPENSE_COLORS: Record<string, string> = {
   Beauty: "#c77baf",
   Other: "var(--accent)",
 };
+
+const EXPENSE_FILE = "13-Trackers/Expense Tracker.md";
+const BOOK_FILE = "15-Books/Book List.md";
+const STUDY_FILE = "11-Todo/Study Tasks.md";
 
 // Default palette for color dots in schedule rows when "Color" column is empty.
 const DEFAULT_DOT_COLOR = "#7d8cc4"; // periwinkle
@@ -222,7 +229,159 @@ function parseSchedule(md: string): CalEvent[] {
   return out;
 }
 
-/* ------------------------------- live load ----------------------------- */
+/** Parse `15-Books/Book List.md` → BookSection[] grouped by category. */
+export function parseBooks(md: string): BookSection[] {
+  const out: BookSection[] = [];
+  const clean = stripCode(md);
+  const lines = clean.split("\n");
+  let cur: BookSection | null = null;
+  for (const line of lines) {
+    const h = line.match(/^##\s+(.*)$/);
+    if (h) {
+      const cat = h[1].trim();
+      // Skip index / legend / helper sections — keep only the per-category book tables.
+      if (/Categories|Status Legend|How to Add|Related|Reading Notes/.test(cat)) {
+        cur = null;
+        continue;
+      }
+      cur = { category: cat, items: [] };
+      out.push(cur);
+      continue;
+    }
+    if (!cur) continue;
+    const t = line.trim();
+    if (!t.startsWith("|")) continue;
+    if (/^\|[\s:|-]+\|$/.test(t)) continue; // separator row
+    const cells = t.split("|").slice(1, -1).map((c) => c.trim());
+    if (cells.length < 4) continue;
+    if (/^Title$/i.test(cells[0])) continue; // header row
+    if (cells.every((c) => c === "" || c === "—" || /\(example\)/i.test(c))) continue; // empty/example
+    const item: BookItem = {
+      title: cells[0].replace(/\*\(example\)\*/g, "").trim(),
+      author: cells[1] || "",
+      status: cells[2] || "",
+      note: cells[3] || "",
+    };
+    cur.items.push(item);
+  }
+  return out;
+}
+
+/** Parse `11-Todo/Study Tasks.md` → today's study tasks (checkbox list). */
+export function parseStudyTasks(md: string): StudyTaskItem[] {
+  const out: StudyTaskItem[] = [];
+  const clean = stripCode(md);
+  const lines = clean.split("\n");
+  const idx = lines.findIndex((l) => l.includes("##") && l.includes("Today's Study"));
+  if (idx < 0) return out;
+  for (let i = idx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) break;
+    const m = lines[i].match(/^\s*-\s*\[([ xX])\]\s*(.*)$/);
+    if (!m) continue;
+    const raw = m[2].replace(/[*(]/g, "").trim();
+    if (!raw || /（模拟任务）/.test(raw)) continue;
+    out.push({ name: raw, done: m[1].toLowerCase() === "x" });
+  }
+  return out;
+}
+
+/**
+ * Append one row to the `## 📝 Daily Expense Log` table in Expense Tracker.md.
+ * Inserts after the last data row of that table (before the following `---`/`## `).
+ */
+export async function appendExpenseRow(
+  app: App,
+  row: { date: string; category: string; item: string; amount: number }
+): Promise<void> {
+  let content: string;
+  try {
+    content = await app.vault.adapter.read(EXPENSE_FILE);
+  } catch {
+    return;
+  }
+  const lines = content.split("\n");
+  const headerIdx = lines.findIndex(
+    (l) => l.includes("##") && l.includes("Daily Expense Log")
+  );
+  if (headerIdx < 0) return;
+  let lastRow = -1;
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const tr = lines[i].trim();
+    if (tr.startsWith("|")) lastRow = i;
+    else if (tr === "" || tr.startsWith("---")) break;
+    else break;
+  }
+  if (lastRow < 0) return;
+  const newRow = `| ${row.date} | ${row.category} | ${row.item || "—"} | ${row.amount.toFixed(2)} |`;
+  lines.splice(lastRow + 1, 0, newRow);
+  await app.vault.adapter.write(EXPENSE_FILE, lines.join("\n"));
+}
+
+/**
+ * Append a book to the chosen category section of Book List.md.
+ * Reuses an existing empty data row if present, otherwise appends after the table.
+ */
+export async function appendBookRow(
+  app: App,
+  row: { category: string; title: string; author: string; status: string; note: string }
+): Promise<void> {
+  let content: string;
+  try {
+    content = await app.vault.adapter.read(BOOK_FILE);
+  } catch {
+    return;
+  }
+  const lines = content.split("\n");
+  const catIdx = lines.findIndex((l) => l.startsWith("##") && l.includes(row.category));
+  if (catIdx < 0) return;
+  let firstData = -1;
+  let tableEnd = -1;
+  for (let i = catIdx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) break;
+    const tr = lines[i].trim();
+    if (tr.startsWith("|")) {
+      if (firstData < 0) firstData = i;
+      tableEnd = i;
+    }
+  }
+  if (tableEnd < 0) return;
+  // Prefer an empty data row: |  |  |  |  | (blank, em-dash, or example placeholder)
+  let target = -1;
+  for (let i = firstData + 1; i <= tableEnd; i++) {
+    const cells = lines[i].split("|").slice(1, -1).map((c) => c.trim());
+    if (cells.length && cells.every((c) => c === "" || c === "—" || /\(example\)/i.test(c))) {
+      target = i;
+      break;
+    }
+  }
+  const newRow = `| ${row.title} | ${row.author || "—"} | ${row.status || "⬜ Want to read"} | ${row.note || "—"} |`;
+  if (target >= 0) lines[target] = newRow;
+  else lines.splice(tableEnd + 1, 0, newRow);
+  await app.vault.adapter.write(BOOK_FILE, lines.join("\n"));
+}
+
+/** Append `- [ ] name` to the "Today's Study" list in Study Tasks.md. */
+export async function appendStudyTask(app: App, name: string): Promise<void> {
+  let content: string;
+  try {
+    content = await app.vault.adapter.read(STUDY_FILE);
+  } catch {
+    return;
+  }
+  const lines = content.split("\n");
+  const idx = lines.findIndex((l) => l.includes("##") && l.includes("Today's Study"));
+  if (idx < 0) return;
+  let insertAt = idx + 1;
+  for (let i = idx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) {
+      insertAt = i;
+      break;
+    }
+    if (/^\s*-\s*\[[ xX]\]/.test(lines[i])) insertAt = i + 1;
+  }
+  lines.splice(insertAt, 0, "- [ ] " + name);
+  await app.vault.adapter.write(STUDY_FILE, lines.join("\n"));
+}
 export async function loadBloomDataLive(app: App): Promise<BloomData> {
   const d = loadBloomData(); // static fallback — never blank
   const now = new Date();
@@ -422,12 +581,19 @@ export async function loadBloomDataLive(app: App): Promise<BloomData> {
     const subj = tablesAfter(learn, "## Subjects").filter((r) => r[0] && !/^Subject/i.test(r[0])).length;
     if (subj > 0) d.library = { subjects: subj, books: d.library.books };
   }
-  const books = await read("15-Books/Book List.md");
+  const books = await read(BOOK_FILE);
   if (books) {
-    const count = readTable(stripCode(books)).filter(
-      (r) => r[0] && !/^(Title|Category|Book|Subject|Author)/i.test(r[0])
-    ).length;
+    const sections = parseBooks(books);
+    const count = sections.reduce((n, s) => n + s.items.length, 0);
     if (count > 0) d.library.books = count;
+    if (sections.length) d.books = sections;
+  }
+
+  /* ---- Study tasks: today's study list ---- */
+  const study = await read(STUDY_FILE);
+  if (study) {
+    const tasks = parseStudyTasks(study);
+    if (tasks.length) d.studyTasks = tasks;
   }
 
   /* ---- Today date ---- */

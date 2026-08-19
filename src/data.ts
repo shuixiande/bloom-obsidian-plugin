@@ -72,6 +72,26 @@ export interface ImportantDate {
   color: string;
 }
 
+/** A single book entry inside a category section of the Book List. */
+export interface BookItem {
+  title: string;
+  author: string;
+  status: string;
+  note: string;
+}
+
+/** A category section in the Book List (e.g. "📗 Economics & Finance"). */
+export interface BookSection {
+  category: string;
+  items: BookItem[];
+}
+
+/** A checkable study task (from "Today's Study" in Study Tasks.md). */
+export interface StudyTaskItem {
+  name: string;
+  done: boolean;
+}
+
 export interface TopTask {
   title: string;
   description?: string;
@@ -107,6 +127,10 @@ export interface BloomData {
   tasks: { todo: Task[]; doing: Task[]; done: Task[] };
   // Per-day metadata for the redesigned calendar grid (length = daysInMonth).
   monthEvents: DayMeta[];
+  // Books grouped by category (15-Books/Book List.md).
+  books: BookSection[];
+  // Today's study tasks (11-Todo/Study Tasks.md → "Today's Study").
+  studyTasks: StudyTaskItem[];
   // Bookkeeping the calendar header still needs.
   calendar: {
     monthLabel: string;
@@ -228,6 +252,8 @@ export function loadBloomData(): BloomData {
       ],
     },
     monthEvents: defaultMonthEvents(),
+    books: [],
+    studyTasks: [],
     calendar: {
       monthLabel: "August 2026",
       year: 2026,

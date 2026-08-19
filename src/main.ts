@@ -11,13 +11,36 @@ import {
   setCalendarMonth,
   newCalNav,
   shiftCalendarMonth,
+  booksView,
+  learningView,
+  trackersView,
+  tasksView,
 } from "./dashboard";
 import type { CalNav } from "./dashboard";
 import { loadBloomDataLive } from "./vault";
+import {
+  appendExpenseRow,
+  appendBookRow,
+  appendStudyTask,
+  EXPENSE_COLORS,
+} from "./vault";
 import { loadBloomData } from "./data";
 import type { BloomData } from "./data";
 import { BloomSettingsModal } from "./settings";
 import { NewTaskModal } from "./task-modal";
+import { EntryModal } from "./entry-modal";
+import type { ModalField } from "./entry-modal";
+
+const EXPENSE_FILE = "13-Trackers/Expense Tracker.md";
+const BOOK_FILE = "15-Books/Book List.md";
+const STUDY_FILE = "11-Todo/Study Tasks.md";
+
+/** Local-date ISO string (YYYY-MM-DD) used as the default expense date. */
+function todayISO(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 export const VIEW_TYPE_BLOOM = "bloom-view";
 
@@ -125,7 +148,7 @@ export class BloomView extends ItemView {
     });
 
     // Search box → filter Tasks board
-    root.querySelectorAll<HTMLElement>(".search-box input").forEach((inp) => {
+    root.querySelectorAll<HTMLInputElement>(".search-box input").forEach((inp) => {
       inp.addEventListener("input", () => this.filterTasks(inp.value.trim().toLowerCase()));
     });
 
@@ -141,6 +164,9 @@ export class BloomView extends ItemView {
     // "+ New task" → append to Daily Tasks.md and update the board live
     const newTask = root.querySelector<HTMLElement>("#new-task-btn");
     newTask?.addEventListener("click", () => this.addTask());
+
+    // Expense / Book / Study "add" buttons + study checkboxes
+    this.wireAddControls(root);
 
     // Settings → open the settings modal
     const settingsBtn = root.querySelector<HTMLElement>("#settings-btn");
@@ -252,6 +278,205 @@ export class BloomView extends ItemView {
     const open = num('.board-col[data-col="todo"] .col-count') + num('.board-col[data-col="doing"] .col-count');
     const done = num('.board-col[data-col="done"] .col-count');
     sub.textContent = `${open} open · ${done} done today`;
+  }
+
+  /* ------------------------- add controls wiring ------------------------- */
+  /** Wire the per-section "+Add" buttons and study checkboxes within `scope`. */
+  private wireAddControls(scope: HTMLElement) {
+    scope.querySelector<HTMLElement>("#add-expense-btn")?.addEventListener("click", () => this.addExpense());
+    scope.querySelector<HTMLElement>("#add-book-btn")?.addEventListener("click", () => this.addBook());
+    scope.querySelector<HTMLElement>("#add-study-btn")?.addEventListener("click", () => this.addStudyTask());
+    scope.querySelectorAll<HTMLElement>(".chk-row .chk").forEach((chk) => {
+      chk.addEventListener("click", () => {
+        const name = chk.closest<HTMLElement>(".chk-row")?.dataset.name;
+        if (name) this.toggleStudyTask(name);
+      });
+    });
+  }
+
+  /** Rebuild a single view section from the latest in-memory data. */
+  private rebuildSection(id: string) {
+    if (!this.lastData) return;
+    const old = this.containerEl.querySelector<HTMLElement>(`.view[data-view="${id}"]`);
+    if (!old) return;
+    let html = "";
+    if (id === "books") html = booksView(this.lastData);
+    else if (id === "learning") html = learningView(this.lastData);
+    else if (id === "trackers") html = trackersView(this.lastData);
+    else if (id === "tasks") html = tasksView(this.lastData);
+    if (!html) return;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    const fresh = tmp.firstElementChild as HTMLElement | null;
+    if (!fresh) return;
+    old.replaceWith(fresh);
+    this.wireAddControls(fresh);
+  }
+
+  /* ------------------------------ EXPENSE -------------------------------- */
+  private addExpense() {
+    const options = Object.keys(EXPENSE_COLORS).map((k) => ({ value: k, label: k }));
+    const fields: ModalField[] = [
+      { key: "date", label: "Date", type: "text", placeholder: "2026-08-19", defaultValue: todayISO() },
+      { key: "category", label: "Category", type: "select", options },
+      { key: "item", label: "Item", type: "text", placeholder: "e.g. Coffee" },
+      { key: "amount", label: "Amount (¥)", type: "number", placeholder: "0.00" },
+    ];
+    new EntryModal(
+      this.app,
+      "Add expense",
+      "Logged to Expense Tracker → Daily Expense Log.",
+      fields,
+      "+ Add expense",
+      (v) => this.createExpense(v)
+    ).open();
+  }
+
+  private async createExpense(v: Record<string, string>) {
+    const date = (v.date || todayISO()).trim();
+    const category = (v.category || "Other").trim();
+    const item = (v.item || "").trim();
+    const amount = parseFloat(v.amount);
+    if (isNaN(amount) || amount <= 0) {
+      new Notice("Bloom: amount must be a positive number");
+      return;
+    }
+    try {
+      await appendExpenseRow(this.app, { date, category, item, amount });
+    } catch (e) {
+      console.error("[Bloom] addExpense write failed:", e);
+      new Notice("Bloom: could not save expense");
+      return;
+    }
+    // Keep the donut + total in sync with what was just added.
+    const exp = this.lastData?.trackers.expense;
+    if (exp) {
+      const cat = exp.categories.find((c) => c.name === category);
+      if (cat) cat.amount = +(cat.amount + amount).toFixed(2);
+      else
+        exp.categories.push({
+          name: category,
+          amount: +amount.toFixed(2),
+          pct: 0,
+          color: EXPENSE_COLORS[category] ?? "var(--accent)",
+        });
+      const total = exp.categories.reduce((a, c) => a + c.amount, 0);
+      exp.total = +total.toFixed(2);
+      exp.categories.forEach((c) => (c.pct = Math.round((c.amount / total) * 100) || 0));
+      this.lastData!.trackers.month.expense = `¥${exp.total.toFixed(0)}`;
+    }
+    this.rebuildSection("trackers");
+    new Notice("Bloom: expense added");
+  }
+
+  /* -------------------------------- BOOK --------------------------------- */
+  private addBook() {
+    const cats = (this.lastData?.books ?? []).map((s) => ({ value: s.category, label: s.category }));
+    if (!cats.length) {
+      new Notice("Bloom: no book categories found");
+      return;
+    }
+    const fields: ModalField[] = [
+      { key: "category", label: "Category", type: "select", options: cats },
+      { key: "title", label: "Title", type: "text", placeholder: "Book title" },
+      { key: "author", label: "Author", type: "text", placeholder: "Author" },
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        options: [
+          { value: "📖 Reading", label: "📖 Reading" },
+          { value: "✅ Finished", label: "✅ Finished" },
+          { value: "⬜ Want to read", label: "⬜ Want to read" },
+          { value: "⏸️ Paused", label: "⏸️ Paused" },
+        ],
+      },
+    ];
+    new EntryModal(
+      this.app,
+      "Add book",
+      "Added to Book List under the chosen category.",
+      fields,
+      "+ Add book",
+      (v) => this.createBook(v)
+    ).open();
+  }
+
+  private async createBook(v: Record<string, string>) {
+    const category = (v.category || "").trim();
+    const title = (v.title || "").trim();
+    if (!title) {
+      new Notice("Bloom: book title can't be empty");
+      return;
+    }
+    const status = v.status || "⬜ Want to read";
+    try {
+      await appendBookRow(this.app, {
+        category,
+        title,
+        author: (v.author || "").trim(),
+        status,
+        note: "",
+      });
+    } catch (e) {
+      console.error("[Bloom] addBook write failed:", e);
+      new Notice("Bloom: could not save book");
+      return;
+    }
+    const sec = this.lastData?.books.find((s) => s.category === category);
+    if (sec) sec.items.push({ title, author: v.author || "", status, note: "" });
+    this.rebuildSection("books");
+    new Notice("Bloom: book added");
+  }
+
+  /* ------------------------------- STUDY --------------------------------- */
+  private addStudyTask() {
+    // Reuses the same single-field modal pattern as "New task".
+    new NewTaskModal(this.app, (name) => this.createStudyTask(name)).open();
+  }
+
+  private async createStudyTask(name: string) {
+    const task = name.trim();
+    if (!task) return;
+    try {
+      await appendStudyTask(this.app, task);
+    } catch (e) {
+      console.error("[Bloom] addStudyTask write failed:", e);
+      new Notice("Bloom: could not save study task");
+      return;
+    }
+    this.lastData?.studyTasks.push({ name: task, done: false });
+    this.rebuildSection("learning");
+    new Notice("Bloom: study task added");
+  }
+
+  /** Toggle a study task checkbox and write the new state back to its source file. */
+  private async toggleStudyTask(name: string) {
+    try {
+      const content = await this.app.vault.adapter.read(STUDY_FILE);
+      const lines = content.split("\n");
+      let inToday = false;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith("## ")) {
+          inToday = lines[i].includes("Today's Study");
+          continue;
+        }
+        if (!inToday) continue;
+        const m = lines[i].match(/^\s*-\s*\[([ xX])\]\s*(.*)$/);
+        if (m && m[2].replace(/[*(]/g, "").trim() === name) {
+          lines[i] = lines[i].replace(/\[[ xX]\]/, m[1].toLowerCase() === "x" ? "[ ]" : "[x]");
+          break;
+        }
+      }
+      await this.app.vault.adapter.write(STUDY_FILE, lines.join("\n"));
+    } catch (e) {
+      console.error("[Bloom] toggleStudyTask write failed:", e);
+      new Notice("Bloom: could not save study state");
+      return;
+    }
+    const t = this.lastData?.studyTasks.find((x) => x.name === name);
+    if (t) t.done = !t.done;
+    this.rebuildSection("learning");
   }
 
   // back-reference set by the plugin

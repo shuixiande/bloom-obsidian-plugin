@@ -1,6 +1,6 @@
 {
   "name": "bloom",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Soft pastel Obsidian dashboard plugin",
   "main": "main.js",
   "scripts": {

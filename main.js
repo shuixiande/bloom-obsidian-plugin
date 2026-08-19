@@ -33,9 +33,15 @@ __export(main_exports, {
   default: () => BloomPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/dashboard.ts
+function esc(s) {
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
+}
 var ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>`,
   today: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>`,
@@ -293,7 +299,10 @@ function trackersView(d) {
         <div class="card">
           <div class="card-head">
             <div><div class="t-title">Expense Overview</div><div class="t-sub">${e.month}</div></div>
-            <div class="t-value small">\xA5${e.total.toFixed(2)}</div>
+            <div class="card-head-actions">
+              <div class="t-value small">\xA5${e.total.toFixed(2)}</div>
+              <button class="btn-sm" id="add-expense-btn" title="Add an expense">+ Add</button>
+            </div>
           </div>
           ${donut(e.categories, e.total, e.month)}
         </div>
@@ -328,6 +337,47 @@ function placeholderView(id, title) {
       <div class="ph-title">${title}</div>
       <div class="ph-sub">Part of the Bloom design \u2014 wiring this section to your vault is the next step.</div>
     </div>
+  </section>`;
+}
+function booksView(d) {
+  const total = d.books.reduce((n, s) => n + s.items.length, 0);
+  const sections = d.books.length ? d.books.map((sec) => {
+    const rows = sec.items.map(
+      (b) => `<div class="book-row">
+                <div class="book-title">${esc(b.title)}</div>
+                <div class="book-meta">
+                  ${b.author ? `<span>${esc(b.author)}</span>` : ""}
+                  ${b.status ? `<span class="book-status">${esc(b.status)}</span>` : ""}
+                </div>
+              </div>`
+    ).join("");
+    return `<div class="book-cat">
+            <div class="book-cat-head">${esc(sec.category)}</div>
+            <div class="book-list">${rows}</div>
+          </div>`;
+  }).join("") : `<div class="ph-sub">No books yet \u2014 add your first one.</div>`;
+  return `<section class="view hidden" data-view="books">
+    <div class="board-head">
+      <div><div class="board-title">Books</div><div class="board-sub">${total} on your shelf</div></div>
+      <button class="btn-primary" id="add-book-btn">+ Add book</button>
+    </div>
+    <div class="books-wrap">${sections}</div>
+  </section>`;
+}
+function learningView(d) {
+  const open = d.studyTasks.filter((t) => !t.done).length;
+  const items = d.studyTasks.length ? d.studyTasks.map(
+    (t) => `<div class="chk-row ${t.done ? "done" : ""}" data-name="${esc(t.name)}">
+            <span class="chk ${t.done ? "on" : ""}"></span>
+            <span class="chk-name">${esc(t.name)}</span>
+          </div>`
+  ).join("") : `<div class="ph-sub">No study tasks for today \u2014 add one.</div>`;
+  return `<section class="view hidden" data-view="learning">
+    <div class="board-head">
+      <div><div class="board-title">Learning</div><div class="board-sub">${open} to study</div></div>
+      <button class="btn-primary" id="add-study-btn">+ Add study task</button>
+    </div>
+    <div class="card"><div class="chk-list">${items}</div></div>
   </section>`;
 }
 function buildShell(d, _now, initialView = "home") {
@@ -370,8 +420,8 @@ function buildShell(d, _now, initialView = "home") {
         ${calendarView(d)}
         ${trackersView(d)}
         ${placeholderView("today", "Today")}
-        ${placeholderView("learning", "Learning")}
-        ${placeholderView("books", "Books")}
+        ${learningView(d)}
+        ${booksView(d)}
         ${placeholderView("projects", "Projects")}
       </div></div>
     </main>
@@ -11799,6 +11849,8 @@ function loadBloomData() {
       ]
     },
     monthEvents: defaultMonthEvents(),
+    books: [],
+    studyTasks: [],
     calendar: {
       monthLabel: "August 2026",
       year: 2026,
@@ -11862,6 +11914,9 @@ var EXPENSE_COLORS = {
   Beauty: "#c77baf",
   Other: "var(--accent)"
 };
+var EXPENSE_FILE = "13-Trackers/Expense Tracker.md";
+var BOOK_FILE = "15-Books/Book List.md";
+var STUDY_FILE = "11-Todo/Study Tasks.md";
 var DEFAULT_DOT_COLOR = "#7d8cc4";
 function stripCode(md) {
   return md.replace(/```[\s\S]*?```/g, "");
@@ -12038,6 +12093,159 @@ function parseSchedule(md) {
   }
   return out;
 }
+function parseBooks(md) {
+  const out = [];
+  const clean = stripCode(md);
+  const lines = clean.split("\n");
+  let cur = null;
+  for (const line of lines) {
+    const h = line.match(/^##\s+(.*)$/);
+    if (h) {
+      const cat = h[1].trim();
+      if (/Categories|Status Legend|How to Add|Related|Reading Notes/.test(cat)) {
+        cur = null;
+        continue;
+      }
+      cur = { category: cat, items: [] };
+      out.push(cur);
+      continue;
+    }
+    if (!cur)
+      continue;
+    const t = line.trim();
+    if (!t.startsWith("|"))
+      continue;
+    if (/^\|[\s:|-]+\|$/.test(t))
+      continue;
+    const cells = t.split("|").slice(1, -1).map((c) => c.trim());
+    if (cells.length < 4)
+      continue;
+    if (/^Title$/i.test(cells[0]))
+      continue;
+    if (cells.every((c) => c === "" || c === "\u2014" || /\(example\)/i.test(c)))
+      continue;
+    const item = {
+      title: cells[0].replace(/\*\(example\)\*/g, "").trim(),
+      author: cells[1] || "",
+      status: cells[2] || "",
+      note: cells[3] || ""
+    };
+    cur.items.push(item);
+  }
+  return out;
+}
+function parseStudyTasks(md) {
+  const out = [];
+  const clean = stripCode(md);
+  const lines = clean.split("\n");
+  const idx = lines.findIndex((l) => l.includes("##") && l.includes("Today's Study"));
+  if (idx < 0)
+    return out;
+  for (let i = idx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## "))
+      break;
+    const m = lines[i].match(/^\s*-\s*\[([ xX])\]\s*(.*)$/);
+    if (!m)
+      continue;
+    const raw = m[2].replace(/[*(]/g, "").trim();
+    if (!raw || /（模拟任务）/.test(raw))
+      continue;
+    out.push({ name: raw, done: m[1].toLowerCase() === "x" });
+  }
+  return out;
+}
+async function appendExpenseRow(app, row) {
+  let content;
+  try {
+    content = await app.vault.adapter.read(EXPENSE_FILE);
+  } catch (e) {
+    return;
+  }
+  const lines = content.split("\n");
+  const headerIdx = lines.findIndex(
+    (l) => l.includes("##") && l.includes("Daily Expense Log")
+  );
+  if (headerIdx < 0)
+    return;
+  let lastRow = -1;
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const tr = lines[i].trim();
+    if (tr.startsWith("|"))
+      lastRow = i;
+    else if (tr === "" || tr.startsWith("---"))
+      break;
+    else
+      break;
+  }
+  if (lastRow < 0)
+    return;
+  const newRow = `| ${row.date} | ${row.category} | ${row.item || "\u2014"} | ${row.amount.toFixed(2)} |`;
+  lines.splice(lastRow + 1, 0, newRow);
+  await app.vault.adapter.write(EXPENSE_FILE, lines.join("\n"));
+}
+async function appendBookRow(app, row) {
+  let content;
+  try {
+    content = await app.vault.adapter.read(BOOK_FILE);
+  } catch (e) {
+    return;
+  }
+  const lines = content.split("\n");
+  const catIdx = lines.findIndex((l) => l.startsWith("##") && l.includes(row.category));
+  if (catIdx < 0)
+    return;
+  let firstData = -1;
+  let tableEnd = -1;
+  for (let i = catIdx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## "))
+      break;
+    const tr = lines[i].trim();
+    if (tr.startsWith("|")) {
+      if (firstData < 0)
+        firstData = i;
+      tableEnd = i;
+    }
+  }
+  if (tableEnd < 0)
+    return;
+  let target = -1;
+  for (let i = firstData + 1; i <= tableEnd; i++) {
+    const cells = lines[i].split("|").slice(1, -1).map((c) => c.trim());
+    if (cells.length && cells.every((c) => c === "" || c === "\u2014" || /\(example\)/i.test(c))) {
+      target = i;
+      break;
+    }
+  }
+  const newRow = `| ${row.title} | ${row.author || "\u2014"} | ${row.status || "\u2B1C Want to read"} | ${row.note || "\u2014"} |`;
+  if (target >= 0)
+    lines[target] = newRow;
+  else
+    lines.splice(tableEnd + 1, 0, newRow);
+  await app.vault.adapter.write(BOOK_FILE, lines.join("\n"));
+}
+async function appendStudyTask(app, name) {
+  let content;
+  try {
+    content = await app.vault.adapter.read(STUDY_FILE);
+  } catch (e) {
+    return;
+  }
+  const lines = content.split("\n");
+  const idx = lines.findIndex((l) => l.includes("##") && l.includes("Today's Study"));
+  if (idx < 0)
+    return;
+  let insertAt = idx + 1;
+  for (let i = idx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) {
+      insertAt = i;
+      break;
+    }
+    if (/^\s*-\s*\[[ xX]\]/.test(lines[i]))
+      insertAt = i + 1;
+  }
+  lines.splice(insertAt, 0, "- [ ] " + name);
+  await app.vault.adapter.write(STUDY_FILE, lines.join("\n"));
+}
 async function loadBloomDataLive(app) {
   var _a;
   const d = loadBloomData();
@@ -12134,12 +12342,12 @@ async function loadBloomDataLive(app) {
       }));
     }
   }
-  const todayISO = fmtISO(now);
-  const dn = await read(`12-Calendar/Daily Notes/${todayISO}.md`);
+  const todayISO2 = fmtISO(now);
+  const dn = await read(`12-Calendar/Daily Notes/${todayISO2}.md`);
   if (dn) {
     const fm = parseFrontmatter(dn);
     if (fm["topTask"]) {
-      d.topTask = { title: fm["topTask"], file: `12-Calendar/Daily Notes/${todayISO}.md`, done: false };
+      d.topTask = { title: fm["topTask"], file: `12-Calendar/Daily Notes/${todayISO2}.md`, done: false };
     }
   }
   if (!d.topTask) {
@@ -12225,7 +12433,7 @@ async function loadBloomDataLive(app) {
     if (totalM)
       lines.push(`Expenses: \xA5${totalM[1]}`);
     if (lines.length)
-      d.todayNote = { title: `Daily Note \xB7 ${fmtShort(todayISO)}`, lines };
+      d.todayNote = { title: `Daily Note \xB7 ${fmtShort(todayISO2)}`, lines };
   }
   const learn = await read("14-Learning/README.md");
   if (learn) {
@@ -12233,13 +12441,20 @@ async function loadBloomDataLive(app) {
     if (subj > 0)
       d.library = { subjects: subj, books: d.library.books };
   }
-  const books = await read("15-Books/Book List.md");
+  const books = await read(BOOK_FILE);
   if (books) {
-    const count = readTable(stripCode(books)).filter(
-      (r) => r[0] && !/^(Title|Category|Book|Subject|Author)/i.test(r[0])
-    ).length;
+    const sections = parseBooks(books);
+    const count = sections.reduce((n, s) => n + s.items.length, 0);
     if (count > 0)
       d.library.books = count;
+    if (sections.length)
+      d.books = sections;
+  }
+  const study = await read(STUDY_FILE);
+  if (study) {
+    const tasks = parseStudyTasks(study);
+    if (tasks.length)
+      d.studyTasks = tasks;
   }
   d.todayDate = {
     solar: `${MONTHS2[now.getMonth()].slice(0, 3)} ${now.getDate()}`,
@@ -12384,17 +12599,99 @@ var NewTaskModal = class extends import_obsidian2.Modal {
   }
 };
 
+// src/entry-modal.ts
+var import_obsidian3 = require("obsidian");
+var EntryModal = class extends import_obsidian3.Modal {
+  constructor(app, titleText, noteText, fields, submitLabel, onConfirm) {
+    super(app);
+    this.titleText = titleText;
+    this.noteText = noteText;
+    this.fields = fields;
+    this.submitLabel = submitLabel;
+    this.onConfirm = onConfirm;
+    __publicField(this, "submitted", false);
+    __publicField(this, "controls", {});
+  }
+  onOpen() {
+    var _a, _b, _c;
+    const { contentEl } = this;
+    contentEl.empty();
+    const wrap = contentEl.createDiv({ cls: "bloom bloom-settings bloom-entry-modal" });
+    wrap.createEl("h3", { text: this.titleText, cls: "bs-title" });
+    if (this.noteText) {
+      wrap.createEl("div", { text: this.noteText, cls: "bs-note" });
+    }
+    let firstInput = null;
+    for (const f of this.fields) {
+      const row = wrap.createDiv({ cls: "bs-row" });
+      row.createSpan({ text: f.label, cls: "bs-label" });
+      const fieldBox = row.createDiv({ cls: "bs-field" });
+      if (f.type === "select") {
+        const dd = new import_obsidian3.DropdownComponent(fieldBox);
+        ((_a = f.options) != null ? _a : []).forEach((o) => dd.addOption(o.value, o.label));
+        if (f.defaultValue)
+          dd.setValue(f.defaultValue);
+        this.controls[f.key] = dd;
+      } else {
+        const tc = new import_obsidian3.TextComponent(fieldBox).setPlaceholder((_b = f.placeholder) != null ? _b : "").setValue((_c = f.defaultValue) != null ? _c : "");
+        tc.inputEl.addClass("bs-input");
+        if (f.type === "number")
+          tc.inputEl.setAttribute("inputmode", "decimal");
+        if (!firstInput)
+          firstInput = tc;
+        tc.inputEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            this.submit();
+          }
+        });
+        this.controls[f.key] = tc;
+      }
+    }
+    const foot = wrap.createDiv({ cls: "bs-row bs-foot" });
+    const cancel = foot.createEl("button", { text: "Cancel", cls: "bs-btn" });
+    cancel.addEventListener("click", () => this.close());
+    const add = foot.createEl("button", { text: this.submitLabel, cls: "bs-btn bs-primary" });
+    add.addEventListener("click", () => this.submit());
+    window.setTimeout(() => firstInput == null ? void 0 : firstInput.inputEl.focus(), 50);
+  }
+  submit() {
+    var _a, _b;
+    const values = {};
+    for (const f of this.fields) {
+      const c = this.controls[f.key];
+      if (!c)
+        continue;
+      values[f.key] = ((_b = (_a = c.getValue) == null ? void 0 : _a.call(c)) != null ? _b : "").toString().trim();
+    }
+    this.submitted = true;
+    this.onConfirm(values);
+    this.close();
+  }
+  onClose() {
+    if (!this.submitted) {
+    }
+    this.contentEl.empty();
+  }
+};
+
 // src/main.ts
+var STUDY_FILE2 = "11-Todo/Study Tasks.md";
+function todayISO() {
+  const d = /* @__PURE__ */ new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 var VIEW_TYPE_BLOOM = "bloom-view";
 var DEFAULT_SETTINGS = { dark: false, defaultView: "home" };
 var TODO_FILE = "11-Todo/Daily Tasks.md";
-function esc(s) {
+function esc2(s) {
   return s.replace(
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
   );
 }
-var BloomView = class extends import_obsidian3.ItemView {
+var BloomView = class extends import_obsidian4.ItemView {
   constructor(leaf, settings) {
     super(leaf);
     __publicField(this, "currentView", "home");
@@ -12484,6 +12781,7 @@ var BloomView = class extends import_obsidian3.ItemView {
     });
     const newTask = root.querySelector("#new-task-btn");
     newTask == null ? void 0 : newTask.addEventListener("click", () => this.addTask());
+    this.wireAddControls(root);
     const settingsBtn = root.querySelector("#settings-btn");
     settingsBtn == null ? void 0 : settingsBtn.addEventListener("click", () => {
       new BloomSettingsModal(this.app, this.plugin).open();
@@ -12536,21 +12834,21 @@ var BloomView = class extends import_obsidian3.ItemView {
       await this.app.vault.adapter.write(TODO_FILE, appended);
     } catch (e) {
       console.error("[Bloom] addTask write failed:", e);
-      new import_obsidian3.Notice("Bloom: could not save new task");
+      new import_obsidian4.Notice("Bloom: could not save new task");
       return;
     }
     const todoBody = this.containerEl.querySelector('.board-col[data-col="todo"] .board-col-body');
     if (todoBody) {
       const card = document.createElement("div");
       card.className = "t-card";
-      card.innerHTML = `<span class="t-tag" style="color:#b5627c">Daily</span><div class="t-name">${esc(task)}</div>`;
+      card.innerHTML = `<span class="t-tag" style="color:#b5627c">Daily</span><div class="t-name">${esc2(task)}</div>`;
       todoBody.appendChild(card);
     }
     const todoCol = this.containerEl.querySelector('.board-col[data-col="todo"]');
     const todoCount = (_b = (_a = todoCol == null ? void 0 : todoCol.querySelector(".board-col-body")) == null ? void 0 : _a.children.length) != null ? _b : 0;
     (_c = todoCol == null ? void 0 : todoCol.querySelector(".col-count")) == null ? void 0 : _c.replaceChildren(document.createTextNode(String(todoCount)));
     this.refreshBoardSub();
-    new import_obsidian3.Notice("Bloom: task added to Daily Tasks");
+    new import_obsidian4.Notice("Bloom: task added to Daily Tasks");
   }
   /** Mark the home "today's #1" task complete: flip the visual + write back to source file. */
   async toggleTopTask() {
@@ -12577,10 +12875,10 @@ var BloomView = class extends import_obsidian3.ItemView {
         }
       }
       await this.app.vault.adapter.write(file, lines.join("\n"));
-      new import_obsidian3.Notice(nextDone ? "Bloom: #1 marked done" : "Bloom: #1 reopened");
+      new import_obsidian4.Notice(nextDone ? "Bloom: #1 marked done" : "Bloom: #1 reopened");
     } catch (e) {
       console.error("[Bloom] toggleTopTask write failed:", e);
-      new import_obsidian3.Notice("Bloom: could not save #1 state (Daily Note may not exist)");
+      new import_obsidian4.Notice("Bloom: could not save #1 state (Daily Note may not exist)");
     }
   }
   refreshBoardSub() {
@@ -12595,8 +12893,217 @@ var BloomView = class extends import_obsidian3.ItemView {
     const done = num('.board-col[data-col="done"] .col-count');
     sub.textContent = `${open} open \xB7 ${done} done today`;
   }
+  /* ------------------------- add controls wiring ------------------------- */
+  /** Wire the per-section "+Add" buttons and study checkboxes within `scope`. */
+  wireAddControls(scope) {
+    var _a, _b, _c;
+    (_a = scope.querySelector("#add-expense-btn")) == null ? void 0 : _a.addEventListener("click", () => this.addExpense());
+    (_b = scope.querySelector("#add-book-btn")) == null ? void 0 : _b.addEventListener("click", () => this.addBook());
+    (_c = scope.querySelector("#add-study-btn")) == null ? void 0 : _c.addEventListener("click", () => this.addStudyTask());
+    scope.querySelectorAll(".chk-row .chk").forEach((chk) => {
+      chk.addEventListener("click", () => {
+        var _a2;
+        const name = (_a2 = chk.closest(".chk-row")) == null ? void 0 : _a2.dataset.name;
+        if (name)
+          this.toggleStudyTask(name);
+      });
+    });
+  }
+  /** Rebuild a single view section from the latest in-memory data. */
+  rebuildSection(id) {
+    if (!this.lastData)
+      return;
+    const old = this.containerEl.querySelector(`.view[data-view="${id}"]`);
+    if (!old)
+      return;
+    let html = "";
+    if (id === "books")
+      html = booksView(this.lastData);
+    else if (id === "learning")
+      html = learningView(this.lastData);
+    else if (id === "trackers")
+      html = trackersView(this.lastData);
+    else if (id === "tasks")
+      html = tasksView(this.lastData);
+    if (!html)
+      return;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    const fresh = tmp.firstElementChild;
+    if (!fresh)
+      return;
+    old.replaceWith(fresh);
+    this.wireAddControls(fresh);
+  }
+  /* ------------------------------ EXPENSE -------------------------------- */
+  addExpense() {
+    const options = Object.keys(EXPENSE_COLORS).map((k) => ({ value: k, label: k }));
+    const fields = [
+      { key: "date", label: "Date", type: "text", placeholder: "2026-08-19", defaultValue: todayISO() },
+      { key: "category", label: "Category", type: "select", options },
+      { key: "item", label: "Item", type: "text", placeholder: "e.g. Coffee" },
+      { key: "amount", label: "Amount (\xA5)", type: "number", placeholder: "0.00" }
+    ];
+    new EntryModal(
+      this.app,
+      "Add expense",
+      "Logged to Expense Tracker \u2192 Daily Expense Log.",
+      fields,
+      "+ Add expense",
+      (v) => this.createExpense(v)
+    ).open();
+  }
+  async createExpense(v) {
+    var _a, _b;
+    const date = (v.date || todayISO()).trim();
+    const category = (v.category || "Other").trim();
+    const item = (v.item || "").trim();
+    const amount = parseFloat(v.amount);
+    if (isNaN(amount) || amount <= 0) {
+      new import_obsidian4.Notice("Bloom: amount must be a positive number");
+      return;
+    }
+    try {
+      await appendExpenseRow(this.app, { date, category, item, amount });
+    } catch (e) {
+      console.error("[Bloom] addExpense write failed:", e);
+      new import_obsidian4.Notice("Bloom: could not save expense");
+      return;
+    }
+    const exp = (_a = this.lastData) == null ? void 0 : _a.trackers.expense;
+    if (exp) {
+      const cat = exp.categories.find((c) => c.name === category);
+      if (cat)
+        cat.amount = +(cat.amount + amount).toFixed(2);
+      else
+        exp.categories.push({
+          name: category,
+          amount: +amount.toFixed(2),
+          pct: 0,
+          color: (_b = EXPENSE_COLORS[category]) != null ? _b : "var(--accent)"
+        });
+      const total = exp.categories.reduce((a, c) => a + c.amount, 0);
+      exp.total = +total.toFixed(2);
+      exp.categories.forEach((c) => c.pct = Math.round(c.amount / total * 100) || 0);
+      this.lastData.trackers.month.expense = `\xA5${exp.total.toFixed(0)}`;
+    }
+    this.rebuildSection("trackers");
+    new import_obsidian4.Notice("Bloom: expense added");
+  }
+  /* -------------------------------- BOOK --------------------------------- */
+  addBook() {
+    var _a, _b;
+    const cats = ((_b = (_a = this.lastData) == null ? void 0 : _a.books) != null ? _b : []).map((s) => ({ value: s.category, label: s.category }));
+    if (!cats.length) {
+      new import_obsidian4.Notice("Bloom: no book categories found");
+      return;
+    }
+    const fields = [
+      { key: "category", label: "Category", type: "select", options: cats },
+      { key: "title", label: "Title", type: "text", placeholder: "Book title" },
+      { key: "author", label: "Author", type: "text", placeholder: "Author" },
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        options: [
+          { value: "\u{1F4D6} Reading", label: "\u{1F4D6} Reading" },
+          { value: "\u2705 Finished", label: "\u2705 Finished" },
+          { value: "\u2B1C Want to read", label: "\u2B1C Want to read" },
+          { value: "\u23F8\uFE0F Paused", label: "\u23F8\uFE0F Paused" }
+        ]
+      }
+    ];
+    new EntryModal(
+      this.app,
+      "Add book",
+      "Added to Book List under the chosen category.",
+      fields,
+      "+ Add book",
+      (v) => this.createBook(v)
+    ).open();
+  }
+  async createBook(v) {
+    var _a;
+    const category = (v.category || "").trim();
+    const title = (v.title || "").trim();
+    if (!title) {
+      new import_obsidian4.Notice("Bloom: book title can't be empty");
+      return;
+    }
+    const status = v.status || "\u2B1C Want to read";
+    try {
+      await appendBookRow(this.app, {
+        category,
+        title,
+        author: (v.author || "").trim(),
+        status,
+        note: ""
+      });
+    } catch (e) {
+      console.error("[Bloom] addBook write failed:", e);
+      new import_obsidian4.Notice("Bloom: could not save book");
+      return;
+    }
+    const sec = (_a = this.lastData) == null ? void 0 : _a.books.find((s) => s.category === category);
+    if (sec)
+      sec.items.push({ title, author: v.author || "", status, note: "" });
+    this.rebuildSection("books");
+    new import_obsidian4.Notice("Bloom: book added");
+  }
+  /* ------------------------------- STUDY --------------------------------- */
+  addStudyTask() {
+    new NewTaskModal(this.app, (name) => this.createStudyTask(name)).open();
+  }
+  async createStudyTask(name) {
+    var _a;
+    const task = name.trim();
+    if (!task)
+      return;
+    try {
+      await appendStudyTask(this.app, task);
+    } catch (e) {
+      console.error("[Bloom] addStudyTask write failed:", e);
+      new import_obsidian4.Notice("Bloom: could not save study task");
+      return;
+    }
+    (_a = this.lastData) == null ? void 0 : _a.studyTasks.push({ name: task, done: false });
+    this.rebuildSection("learning");
+    new import_obsidian4.Notice("Bloom: study task added");
+  }
+  /** Toggle a study task checkbox and write the new state back to its source file. */
+  async toggleStudyTask(name) {
+    var _a;
+    try {
+      const content = await this.app.vault.adapter.read(STUDY_FILE2);
+      const lines = content.split("\n");
+      let inToday = false;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith("## ")) {
+          inToday = lines[i].includes("Today's Study");
+          continue;
+        }
+        if (!inToday)
+          continue;
+        const m = lines[i].match(/^\s*-\s*\[([ xX])\]\s*(.*)$/);
+        if (m && m[2].replace(/[*(]/g, "").trim() === name) {
+          lines[i] = lines[i].replace(/\[[ xX]\]/, m[1].toLowerCase() === "x" ? "[ ]" : "[x]");
+          break;
+        }
+      }
+      await this.app.vault.adapter.write(STUDY_FILE2, lines.join("\n"));
+    } catch (e) {
+      console.error("[Bloom] toggleStudyTask write failed:", e);
+      new import_obsidian4.Notice("Bloom: could not save study state");
+      return;
+    }
+    const t = (_a = this.lastData) == null ? void 0 : _a.studyTasks.find((x) => x.name === name);
+    if (t)
+      t.done = !t.done;
+    this.rebuildSection("learning");
+  }
 };
-var BloomPlugin = class extends import_obsidian3.Plugin {
+var BloomPlugin = class extends import_obsidian4.Plugin {
   constructor() {
     super(...arguments);
     __publicField(this, "settings", DEFAULT_SETTINGS);
@@ -12629,11 +13136,11 @@ var BloomPlugin = class extends import_obsidian3.Plugin {
           this.saveSettings();
         }
       });
-      new import_obsidian3.Notice("Bloom dashboard ready \u2014 click the dashboard icon in the left ribbon.");
+      new import_obsidian4.Notice("Bloom dashboard ready \u2014 click the dashboard icon in the left ribbon.");
       console.log("[Bloom] onload complete");
     } catch (e) {
       console.error("[Bloom] onload failed:", e);
-      new import_obsidian3.Notice("Bloom failed to load: " + (e instanceof Error ? e.message : String(e)));
+      new import_obsidian4.Notice("Bloom failed to load: " + (e instanceof Error ? e.message : String(e)));
     }
   }
   async activateView() {
