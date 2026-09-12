@@ -31,3 +31,7 @@ Thumbs.db
 # ---- Keep distribution artifacts tracked (Obsidian install needs them) ----
 # main.js, prototype.js, styles.css, manifest.json, package-lock.json are
 # intentionally committed — they are the files users copy into .obsidian/plugins/.
+
+# local tooling / private materials
+.playwright-cli/
+软著申报/
