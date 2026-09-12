@@ -5,7 +5,7 @@
    "Add task" button; the confirmed name is handed back via onConfirm().
    Reuses the dashboard's pastel tokens by wrapping in `.bloom`.
    ========================================================================= */
-import { App, Modal, Notice, Setting, TextComponent } from "obsidian";
+import { App, Modal, Notice, TextComponent } from "obsidian";
 
 export class NewTaskModal extends Modal {
   private input: TextComponent;

@@ -155,7 +155,6 @@ export interface BloomData {
 const ROUTINE_COLOR = "#7d8cc4";          // periwinkle — daily routine
 const MEDICATION_COLOR = "#b5627c";       // pink — medication (Time Blocking)
 const BIBLE_COLOR = "#7fb069";            // sage — Bible study
-const HOLIDAY_COLOR = "#b87b5a";          // copper — holidays (banner style)
 
 /** Generate a realistic August 2026 month of routine events as static fallback. */
 function defaultMonthEvents(): DayMeta[] {

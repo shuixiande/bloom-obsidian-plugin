@@ -17,7 +17,6 @@ import type {
   Task,
   CalEvent,
   DayMeta,
-  TopTask,
   ImportantDate,
   ExpenseCategory,
   BookSection,

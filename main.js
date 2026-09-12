@@ -12721,7 +12721,7 @@ var BloomView = class extends import_obsidian4.ItemView {
     return "layout-dashboard";
   }
   async onOpen() {
-    this.render();
+    await this.render();
   }
   async onClose() {
     this.containerEl.empty();
@@ -12736,7 +12736,7 @@ var BloomView = class extends import_obsidian4.ItemView {
     this.applyTheme();
   }
   reload() {
-    this.render();
+    void this.render();
   }
   async render() {
     this.containerEl.empty();
@@ -12798,7 +12798,9 @@ var BloomView = class extends import_obsidian4.ItemView {
       new BloomSettingsModal(this.app, this.plugin).open();
     });
     const topCheck = root.querySelector("#top-task-check");
-    topCheck == null ? void 0 : topCheck.addEventListener("click", () => this.toggleTopTask());
+    topCheck == null ? void 0 : topCheck.addEventListener("click", () => {
+      void this.toggleTopTask();
+    });
     root.querySelectorAll("[data-cal-nav]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const dir = parseInt(btn.getAttribute("data-cal-nav") || "0", 10);
@@ -12919,7 +12921,7 @@ var BloomView = class extends import_obsidian4.ItemView {
         var _a2;
         const name = (_a2 = chk.closest(".chk-row")) == null ? void 0 : _a2.dataset.name;
         if (name)
-          this.toggleStudyTask(name);
+          void this.toggleStudyTask(name);
       });
     });
   }
@@ -13178,7 +13180,11 @@ var BloomPlugin = class extends import_obsidian4.Plugin {
     workspace.revealLeaf(leaf);
   }
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign(
+      {},
+      DEFAULT_SETTINGS,
+      await this.loadData()
+    );
   }
   async saveSettings() {
     await this.saveData(this.settings);

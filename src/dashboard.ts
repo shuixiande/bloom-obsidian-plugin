@@ -58,7 +58,6 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** "HH:MM" -> sortable number; "8pm" -> 20*60; anything else -> 25*60 (end of day). */
 function timeToMin(t?: string): number {
@@ -113,8 +112,8 @@ const BOARD_COLS = [
 export function tasksView(d: BloomData): string {
   const open = d.tasks.todo.length + d.tasks.doing.length;
   const cols = BOARD_COLS.map((c) => {
-    const list = d.tasks[c.key as "todo" | "doing" | "done"].map(taskCard).join("");
-    const count = d.tasks[c.key as "todo" | "doing" | "done"].length;
+    const list = d.tasks[c.key].map(taskCard).join("");
+    const count = d.tasks[c.key].length;
     return `<div class="board-col" style="--tint:${c.tint}" data-col="${c.key}">
       <div class="board-col-head">
         <span class="col-dot" style="background:${c.dot}"></span>

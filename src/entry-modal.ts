@@ -5,7 +5,7 @@
    by wrapping content in `.bloom`. Avoids `window.prompt()` (blocked inside
    Obsidian's iframe sandbox) — the same pattern as NewTaskModal.
    ========================================================================= */
-import { App, Modal, Notice, TextComponent, DropdownComponent } from "obsidian";
+import { App, Modal, TextComponent, DropdownComponent } from "obsidian";
 
 export interface ModalField {
   key: string;

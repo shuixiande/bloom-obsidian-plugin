@@ -31,8 +31,6 @@ import { NewTaskModal } from "./task-modal";
 import { EntryModal } from "./entry-modal";
 import type { ModalField } from "./entry-modal";
 
-const EXPENSE_FILE = "13-Trackers/Expense Tracker.md";
-const BOOK_FILE = "15-Books/Book List.md";
 const STUDY_FILE = "11-Todo/Study Tasks.md";
 
 /** Local-date ISO string (YYYY-MM-DD) used as the default expense date. */
@@ -86,7 +84,7 @@ export class BloomView extends ItemView {
   }
 
   async onOpen() {
-    this.render();
+    await this.render();
   }
   async onClose() {
     this.containerEl.empty();
@@ -103,7 +101,7 @@ export class BloomView extends ItemView {
   }
 
   reload() {
-    this.render();
+    void this.render();
   }
 
   private async render() {
@@ -163,7 +161,7 @@ export class BloomView extends ItemView {
     toggle?.addEventListener("click", () => {
       this.dark = !this.dark;
       this.settings.dark = this.dark;
-      void (this.plugin as BloomPlugin).saveSettings();
+      void this.plugin.saveSettings();
       this.applyTheme();
     });
 
@@ -182,7 +180,9 @@ export class BloomView extends ItemView {
 
     // Home: top-task complete button
     const topCheck = root.querySelector<HTMLElement>("#top-task-check");
-    topCheck?.addEventListener("click", () => this.toggleTopTask());
+    topCheck?.addEventListener("click", () => {
+      void this.toggleTopTask();
+    });
 
     // Calendar month navigation (arrows + Today button)
     root.querySelectorAll<HTMLElement>("[data-cal-nav]").forEach((btn) => {
@@ -298,7 +298,7 @@ export class BloomView extends ItemView {
     scope.querySelectorAll<HTMLElement>(".chk-row .chk").forEach((chk) => {
       chk.addEventListener("click", () => {
         const name = chk.closest<HTMLElement>(".chk-row")?.dataset.name;
-        if (name) this.toggleStudyTask(name);
+        if (name) void this.toggleStudyTask(name);
       });
     });
   }
@@ -555,7 +555,11 @@ export default class BloomPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign(
+      {},
+      DEFAULT_SETTINGS,
+      (await this.loadData()) as Partial<BloomSettings>
+    );
   }
   async saveSettings() {
     await this.saveData(this.settings);
