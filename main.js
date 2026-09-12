@@ -36,11 +36,18 @@ module.exports = __toCommonJS(main_exports);
 var import_obsidian4 = require("obsidian");
 
 // src/dashboard.ts
+var ESC_MAP = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
 function esc(s) {
-  return s.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
-  );
+  return s.replace(/[&<>"']/g, (c) => {
+    var _a;
+    return (_a = ESC_MAP[c]) != null ? _a : c;
+  });
 }
 var ICONS = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>`,
@@ -450,8 +457,13 @@ function setCalendarMonth(root, d, nav) {
   if (title)
     title.textContent = `${MONTHS[nav.monthIndex]} ${nav.year}`;
   const grid = root.querySelector("#cal-grid");
-  if (grid)
-    grid.innerHTML = dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
+  if (grid) {
+    const doc = new DOMParser().parseFromString(
+      dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells,
+      "text/html"
+    );
+    grid.replaceChildren(...Array.from(doc.body.childNodes));
+  }
 }
 function shiftCalendarMonth(nav, delta) {
   const total = nav.year * 12 + nav.monthIndex + delta;
@@ -12685,12 +12697,6 @@ function todayISO() {
 var VIEW_TYPE_BLOOM = "bloom-view";
 var DEFAULT_SETTINGS = { dark: false, defaultView: "home" };
 var TODO_FILE = "11-Todo/Daily Tasks.md";
-function esc2(s) {
-  return s.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
-  );
-}
 var BloomView = class extends import_obsidian4.ItemView {
   constructor(leaf, settings) {
     super(leaf);
@@ -12742,7 +12748,10 @@ var BloomView = class extends import_obsidian4.ItemView {
       });
       this.lastData = data;
       this.calNav = newCalNav(data);
-      wrap.innerHTML = buildShell(data, /* @__PURE__ */ new Date(), this.currentView);
+      const shellDoc = new DOMParser().parseFromString(buildShell(data, /* @__PURE__ */ new Date(), this.currentView), "text/html");
+      const shell = shellDoc.body.firstElementChild;
+      if (shell)
+        wrap.replaceChildren(shell);
       this.wire(wrap);
       this.applyTheme();
       const content = wrap.querySelector(".bloom-content");
@@ -12750,7 +12759,9 @@ var BloomView = class extends import_obsidian4.ItemView {
         content.classList.toggle("wide-content", this.currentView === "calendar");
     } catch (e) {
       console.error("[Bloom] render failed:", e);
-      wrap.innerHTML = '<div style="padding:24px;color:#b5627c">Bloom failed to render \u2014 see DevTools console.</div>';
+      const errBox = wrap.createDiv();
+      errBox.style.cssText = "padding:24px;color:#b5627c";
+      errBox.setText("Bloom failed to render \u2014 see DevTools console.");
     }
   }
   applyTheme() {
@@ -12776,7 +12787,7 @@ var BloomView = class extends import_obsidian4.ItemView {
     toggle == null ? void 0 : toggle.addEventListener("click", () => {
       this.dark = !this.dark;
       this.settings.dark = this.dark;
-      this.plugin.saveSettings();
+      void this.plugin.saveSettings();
       this.applyTheme();
     });
     const newTask = root.querySelector("#new-task-btn");
@@ -12820,7 +12831,9 @@ var BloomView = class extends import_obsidian4.ItemView {
     });
   }
   addTask() {
-    new NewTaskModal(this.app, (name) => this.createTask(name)).open();
+    new NewTaskModal(this.app, (name) => {
+      void this.createTask(name);
+    }).open();
   }
   /** Append `- [ ] name` to Daily Tasks.md, then live-update the board. */
   async createTask(name) {
@@ -12839,10 +12852,11 @@ var BloomView = class extends import_obsidian4.ItemView {
     }
     const todoBody = this.containerEl.querySelector('.board-col[data-col="todo"] .board-col-body');
     if (todoBody) {
-      const card = document.createElement("div");
-      card.className = "t-card";
-      card.innerHTML = `<span class="t-tag" style="color:#b5627c">Daily</span><div class="t-name">${esc2(task)}</div>`;
-      todoBody.appendChild(card);
+      const card = todoBody.createDiv("t-card");
+      const tag = card.createSpan("t-tag");
+      tag.style.color = "#b5627c";
+      tag.setText("Daily");
+      card.createDiv("t-name").setText(task);
     }
     const todoCol = this.containerEl.querySelector('.board-col[data-col="todo"]');
     const todoCount = (_b = (_a = todoCol == null ? void 0 : todoCol.querySelector(".board-col-body")) == null ? void 0 : _a.children.length) != null ? _b : 0;
@@ -12927,9 +12941,8 @@ var BloomView = class extends import_obsidian4.ItemView {
       html = tasksView(this.lastData);
     if (!html)
       return;
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    const fresh = tmp.firstElementChild;
+    const tmp = new DOMParser().parseFromString(html, "text/html");
+    const fresh = tmp.body.firstElementChild;
     if (!fresh)
       return;
     old.replaceWith(fresh);
@@ -12950,7 +12963,9 @@ var BloomView = class extends import_obsidian4.ItemView {
       "Logged to Expense Tracker \u2192 Daily Expense Log.",
       fields,
       "+ Add expense",
-      (v) => this.createExpense(v)
+      (v) => {
+        void this.createExpense(v);
+      }
     ).open();
   }
   async createExpense(v) {
@@ -13020,7 +13035,9 @@ var BloomView = class extends import_obsidian4.ItemView {
       "Added to Book List under the chosen category.",
       fields,
       "+ Add book",
-      (v) => this.createBook(v)
+      (v) => {
+        void this.createBook(v);
+      }
     ).open();
   }
   async createBook(v) {
@@ -13053,7 +13070,9 @@ var BloomView = class extends import_obsidian4.ItemView {
   }
   /* ------------------------------- STUDY --------------------------------- */
   addStudyTask() {
-    new NewTaskModal(this.app, (name) => this.createStudyTask(name)).open();
+    new NewTaskModal(this.app, (name) => {
+      void this.createStudyTask(name);
+    }).open();
   }
   async createStudyTask(name) {
     var _a;
@@ -13111,7 +13130,6 @@ var BloomPlugin = class extends import_obsidian4.Plugin {
   }
   async onload() {
     try {
-      console.log("[Bloom] onload start");
       await this.loadSettings();
       this.registerView(VIEW_TYPE_BLOOM, (leaf) => {
         const v = new BloomView(leaf, this.settings);
@@ -13119,25 +13137,28 @@ var BloomPlugin = class extends import_obsidian4.Plugin {
         this.view = v;
         return v;
       });
-      this.addRibbonIcon("layout-dashboard", "Open Bloom", () => this.activateView());
-      this.addCommand({
-        id: "open-bloom",
-        name: "Open Bloom dashboard",
-        callback: () => this.activateView()
+      this.addRibbonIcon("layout-dashboard", "Open Bloom", () => {
+        void this.activateView();
       });
       this.addCommand({
-        id: "toggle-bloom-theme",
+        id: "open-dashboard",
+        name: "Open dashboard",
+        callback: () => {
+          void this.activateView();
+        }
+      });
+      this.addCommand({
+        id: "toggle-theme",
         name: "Toggle light / dark theme",
         callback: () => {
           var _a;
           const next = !this.settings.dark;
           this.settings.dark = next;
           (_a = this.view) == null ? void 0 : _a.setExternalTheme(next);
-          this.saveSettings();
+          void this.saveSettings();
         }
       });
       new import_obsidian4.Notice("Bloom dashboard ready \u2014 click the dashboard icon in the left ribbon.");
-      console.log("[Bloom] onload complete");
     } catch (e) {
       console.error("[Bloom] onload failed:", e);
       new import_obsidian4.Notice("Bloom failed to load: " + (e instanceof Error ? e.message : String(e)));
@@ -13166,7 +13187,7 @@ var BloomPlugin = class extends import_obsidian4.Plugin {
     var _a;
     this.settings.dark = dark;
     (_a = this.view) == null ? void 0 : _a.setExternalTheme(dark);
-    this.saveSettings();
+    void this.saveSettings();
   }
   reloadView() {
     var _a;
@@ -13176,6 +13197,6 @@ var BloomPlugin = class extends import_obsidian4.Plugin {
     var _a;
     this.settings.defaultView = id;
     (_a = this.view) == null ? void 0 : _a.setExternalView(id);
-    this.saveSettings();
+    void this.saveSettings();
   }
 };

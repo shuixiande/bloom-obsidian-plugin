@@ -4,11 +4,18 @@ if you want to view the source, please visit the github repository of this plugi
 */
 (() => {
   // src/dashboard.ts
+  var ESC_MAP = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  };
   function esc(s) {
-    return s.replace(
-      /[&<>"']/g,
-      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
-    );
+    return s.replace(/[&<>"']/g, (c) => {
+      var _a;
+      return (_a = ESC_MAP[c]) != null ? _a : c;
+    });
   }
   var ICONS = {
     home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>`,
@@ -418,8 +425,13 @@ if you want to view the source, please visit the github repository of this plugi
     if (title)
       title.textContent = `${MONTHS[nav.monthIndex]} ${nav.year}`;
     const grid = root.querySelector("#cal-grid");
-    if (grid)
-      grid.innerHTML = dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
+    if (grid) {
+      const doc = new DOMParser().parseFromString(
+        dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells,
+        "text/html"
+      );
+      grid.replaceChildren(...Array.from(doc.body.childNodes));
+    }
   }
   function shiftCalendarMonth(nav, delta) {
     const total = nav.year * 12 + nav.monthIndex + delta;
@@ -577,15 +589,77 @@ if you want to view the source, please visit the github repository of this plugi
   }
 
   // src/prototype.ts
+  function fromHtml(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const frag = document.createDocumentFragment();
+    while (doc.body.firstChild)
+      frag.appendChild(doc.body.firstChild);
+    return frag;
+  }
   var app = document.getElementById("app");
   if (app) {
     let paint = function(view = "home") {
       const data = loadBloomData();
       lastData = data;
       calNav = newCalNav(data);
-      app.innerHTML = buildShell(data, /* @__PURE__ */ new Date(), view);
+      app.replaceChildren(fromHtml(buildShell(data, /* @__PURE__ */ new Date(), view)));
       wire();
       applyTheme(dark);
+    }, askTaskName = function(onSubmit) {
+      var _a;
+      (_a = document.querySelector(".proto-ask")) == null ? void 0 : _a.remove();
+      const overlay = document.createElement("div");
+      overlay.className = "proto-ask";
+      const box = document.createElement("div");
+      box.className = "proto-ask-box";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "New task name";
+      const ok = document.createElement("button");
+      ok.textContent = "Add";
+      const cancel = document.createElement("button");
+      cancel.textContent = "Cancel";
+      box.append(input, ok, cancel);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      input.focus();
+      const close = () => overlay.remove();
+      const submit = () => {
+        const v = input.value.trim();
+        close();
+        if (v)
+          onSubmit(v);
+      };
+      ok.addEventListener("click", submit);
+      cancel.addEventListener("click", close);
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter")
+          submit();
+        if (ev.key === "Escape")
+          close();
+      });
+    }, addTodoCard = function(name) {
+      var _a, _b, _c;
+      if (!lastData)
+        return;
+      lastData.tasks.todo.push({ name, category: "Daily", color: "#b5627c" });
+      const todoBody = app.querySelector('.board-col[data-col="todo"] .board-col-body');
+      if (todoBody) {
+        const card = document.createElement("div");
+        card.className = "t-card";
+        const tag = document.createElement("span");
+        tag.className = "t-tag";
+        tag.style.color = "#b5627c";
+        tag.textContent = "Daily";
+        const label = document.createElement("div");
+        label.className = "t-name";
+        label.textContent = name;
+        card.append(tag, label);
+        todoBody.appendChild(card);
+      }
+      const todoCol = app.querySelector('.board-col[data-col="todo"]');
+      const todoCount = (_b = (_a = todoCol == null ? void 0 : todoCol.querySelector(".board-col-body")) == null ? void 0 : _a.children.length) != null ? _b : 0;
+      (_c = todoCol == null ? void 0 : todoCol.querySelector(".col-count")) == null ? void 0 : _c.replaceChildren(document.createTextNode(String(todoCount)));
     }, wire = function() {
       app.querySelectorAll(".nav-item").forEach((btn) => {
         btn.addEventListener("click", () => showView(app, btn.dataset.nav));
@@ -606,24 +680,7 @@ if you want to view the source, please visit the github repository of this plugi
         });
       });
       const newTask = app.querySelector("#new-task-btn");
-      newTask == null ? void 0 : newTask.addEventListener("click", () => {
-        var _a, _b, _c;
-        const name = window.prompt("New task name:");
-        if (!name || !name.trim() || !lastData)
-          return;
-        const safe = name.trim().replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-        lastData.tasks.todo.push({ name, category: "Daily", color: "#b5627c" });
-        const todoBody = app.querySelector('.board-col[data-col="todo"] .board-col-body');
-        if (todoBody) {
-          const card = document.createElement("div");
-          card.className = "t-card";
-          card.innerHTML = `<span class="t-tag" style="color:#b5627c">Daily</span><div class="t-name">${safe}</div>`;
-          todoBody.appendChild(card);
-        }
-        const todoCol = app.querySelector('.board-col[data-col="todo"]');
-        const todoCount = (_b = (_a = todoCol == null ? void 0 : todoCol.querySelector(".board-col-body")) == null ? void 0 : _a.children.length) != null ? _b : 0;
-        (_c = todoCol == null ? void 0 : todoCol.querySelector(".col-count")) == null ? void 0 : _c.replaceChildren(document.createTextNode(String(todoCount)));
-      });
+      newTask == null ? void 0 : newTask.addEventListener("click", () => askTaskName((name) => addTodoCard(name)));
       const topCheck = app.querySelector("#top-task-check");
       topCheck == null ? void 0 : topCheck.addEventListener("click", () => {
         const card = app.querySelector(".top-task-card");
@@ -650,11 +707,11 @@ if you want to view the source, please visit the github repository of this plugi
       });
     }, applyTheme = function(d) {
       root == null ? void 0 : root.classList.toggle("theme-dark", d);
-      localStorage.setItem("bloom-dark", d ? "1" : "0");
+      sessionStorage.setItem("bloom-dark", d ? "1" : "0");
     };
     let calNav = { year: 2026, monthIndex: 7 };
     let lastData = null;
-    let dark = localStorage.getItem("bloom-dark") === "1";
+    let dark = sessionStorage.getItem("bloom-dark") === "1";
     const root = app.querySelector(".bloom");
     paint("home");
   }

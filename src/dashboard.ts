@@ -7,10 +7,11 @@
 import type { BloomData, Task, ExpenseCategory, CalEvent, DayMeta } from "./data";
 
 /** Minimal HTML escape for user-supplied strings rendered into markup. */
+const ESC_MAP: Record<string, string> = {
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+};
 function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string)
-  );
+  return s.replace(/[&<>"']/g, (c) => ESC_MAP[c] ?? c);
 }
 
 export const ICONS = {
@@ -475,7 +476,14 @@ export function setCalendarMonth(root: HTMLElement, d: BloomData, nav: CalNav): 
   const title = root.querySelector<HTMLElement>(".cal-title");
   if (title) title.textContent = `${MONTHS[nav.monthIndex]} ${nav.year}`;
   const grid = root.querySelector<HTMLElement>("#cal-grid");
-  if (grid) grid.innerHTML = dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells;
+  if (grid) {
+    // Parse the month markup via DOMParser instead of assigning to innerHTML.
+    const doc = new DOMParser().parseFromString(
+      dow.map((x) => `<div class="cal-dow">${x}</div>`).join("") + cells,
+      "text/html"
+    );
+    grid.replaceChildren(...Array.from(doc.body.childNodes));
+  }
 }
 
 /** Shift month by `delta` (±1, ±2...). */

@@ -194,7 +194,12 @@
 .bloom-content.wide-content { max-width: none; margin: 0; }
 .view { animation: fade 0.18s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.hidden { display: none !important; }
+/* Prototype demo page — inline "new task" ask box (browser only) */
+.proto-ask { position: fixed; inset: 0; background: rgba(40, 36, 44, 0.45); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.proto-ask-box { display: flex; gap: 8px; background: #fff; border-radius: 14px; padding: 14px 16px; box-shadow: 0 12px 40px rgba(40, 36, 44, 0.25); }
+.proto-ask-box input { width: 240px; border: 1px solid #e5dde4; border-radius: 10px; padding: 7px 10px; font: inherit; }
+.proto-ask-box button { border: none; border-radius: 10px; padding: 7px 14px; font: inherit; cursor: pointer; background: #f0e9ee; }
+.proto-ask-box button:hover { filter: brightness(0.96); }
 
 /* ------------------------------- CARDS ---------------------------------- */
 .card {

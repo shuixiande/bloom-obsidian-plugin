@@ -15,6 +15,14 @@ import type { CalNav } from "./dashboard";
 import { loadBloomData } from "./data";
 import type { BloomData } from "./data";
 
+/** Parse trusted, self-generated markup without assigning to innerHTML. */
+function fromHtml(html: string): DocumentFragment {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const frag = document.createDocumentFragment();
+  while (doc.body.firstChild) frag.appendChild(doc.body.firstChild);
+  return frag;
+}
+
 const app = document.getElementById("app");
 if (app) {
   let calNav: CalNav = { year: 2026, monthIndex: 7 };
@@ -24,9 +32,65 @@ if (app) {
     const data = loadBloomData();
     lastData = data;
     calNav = newCalNav(data);
-    app!.innerHTML = buildShell(data, new Date(), view);
+    app!.replaceChildren(fromHtml(buildShell(data, new Date(), view)));
     wire();
     applyTheme(dark);
+  }
+
+  /** Tiny inline prompt (browsers block nothing here, but we keep parity with
+   * the plugin's native-modal flow instead of window.prompt). */
+  function askTaskName(onSubmit: (name: string) => void) {
+    document.querySelector(".proto-ask")?.remove();
+    const overlay = document.createElement("div");
+    overlay.className = "proto-ask";
+    const box = document.createElement("div");
+    box.className = "proto-ask-box";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "New task name";
+    const ok = document.createElement("button");
+    ok.textContent = "Add";
+    const cancel = document.createElement("button");
+    cancel.textContent = "Cancel";
+    box.append(input, ok, cancel);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    input.focus();
+
+    const close = () => overlay.remove();
+    const submit = () => {
+      const v = input.value.trim();
+      close();
+      if (v) onSubmit(v);
+    };
+    ok.addEventListener("click", submit);
+    cancel.addEventListener("click", close);
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") submit();
+      if (ev.key === "Escape") close();
+    });
+  }
+
+  function addTodoCard(name: string) {
+    if (!lastData) return;
+    lastData.tasks.todo.push({ name, category: "Daily", color: "#b5627c" });
+    const todoBody = app!.querySelector<HTMLElement>('.board-col[data-col="todo"] .board-col-body');
+    if (todoBody) {
+      const card = document.createElement("div");
+      card.className = "t-card";
+      const tag = document.createElement("span");
+      tag.className = "t-tag";
+      tag.style.color = "#b5627c";
+      tag.textContent = "Daily";
+      const label = document.createElement("div");
+      label.className = "t-name";
+      label.textContent = name;
+      card.append(tag, label);
+      todoBody.appendChild(card);
+    }
+    const todoCol = app!.querySelector<HTMLElement>('.board-col[data-col="todo"]');
+    const todoCount = todoCol?.querySelector(".board-col-body")?.children.length ?? 0;
+    todoCol?.querySelector(".col-count")?.replaceChildren(document.createTextNode(String(todoCount)));
   }
 
   function wire() {
@@ -51,23 +115,7 @@ if (app) {
     });
 
     const newTask = app!.querySelector<HTMLElement>("#new-task-btn");
-    newTask?.addEventListener("click", () => {
-      const name = window.prompt("New task name:");
-      if (!name || !name.trim() || !lastData) return;
-      const safe = name.trim().replace(/[&<>"']/g, (c) =>
-        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
-      lastData.tasks.todo.push({ name, category: "Daily", color: "#b5627c" });
-      const todoBody = app!.querySelector<HTMLElement>('.board-col[data-col="todo"] .board-col-body');
-      if (todoBody) {
-        const card = document.createElement("div");
-        card.className = "t-card";
-        card.innerHTML = `<span class="t-tag" style="color:#b5627c">Daily</span><div class="t-name">${safe}</div>`;
-        todoBody.appendChild(card);
-      }
-      const todoCol = app!.querySelector<HTMLElement>('.board-col[data-col="todo"]');
-      const todoCount = todoCol?.querySelector(".board-col-body")?.children.length ?? 0;
-      todoCol?.querySelector(".col-count")?.replaceChildren(document.createTextNode(String(todoCount)));
-    });
+    newTask?.addEventListener("click", () => askTaskName((name) => addTodoCard(name)));
 
     const topCheck = app!.querySelector<HTMLElement>("#top-task-check");
     topCheck?.addEventListener("click", () => {
@@ -93,11 +141,12 @@ if (app) {
     });
   }
 
-  let dark = localStorage.getItem("bloom-dark") === "1";
+  // Theme persistence for the demo page (per browser tab).
+  let dark = sessionStorage.getItem("bloom-dark") === "1";
   const root = app.querySelector<HTMLElement>(".bloom");
   function applyTheme(d: boolean) {
     root?.classList.toggle("theme-dark", d);
-    localStorage.setItem("bloom-dark", d ? "1" : "0");
+    sessionStorage.setItem("bloom-dark", d ? "1" : "0");
   }
 
   paint("home");

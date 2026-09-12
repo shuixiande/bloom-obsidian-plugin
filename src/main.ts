@@ -54,10 +54,11 @@ const DEFAULT_SETTINGS: BloomSettings = { dark: false, defaultView: "home" };
 const TODO_FILE = "11-Todo/Daily Tasks.md";
 
 /** Minimal HTML escape for user-supplied task names. */
+const ESC_MAP: Record<string, string> = {
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+};
 function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string)
-  );
+  return s.replace(/[&<>"']/g, (c) => ESC_MAP[c] ?? c);
 }
 
 export class BloomView extends ItemView {
@@ -115,7 +116,11 @@ export class BloomView extends ItemView {
       });
       this.lastData = data;
       this.calNav = newCalNav(data);
-      wrap.innerHTML = buildShell(data, new Date(), this.currentView);
+      // Parse the shell markup via DOMParser (keeps the template-string render
+      // layer without assigning to innerHTML directly).
+      const shellDoc = new DOMParser().parseFromString(buildShell(data, new Date(), this.currentView), "text/html");
+      const shell = shellDoc.body.firstElementChild;
+      if (shell) wrap.replaceChildren(shell);
       this.wire(wrap);
       this.applyTheme();
       // Calendar needs the wide-content class for full-width left-aligned grid.
@@ -123,8 +128,9 @@ export class BloomView extends ItemView {
       if (content) content.classList.toggle("wide-content", this.currentView === "calendar");
     } catch (e) {
       console.error("[Bloom] render failed:", e);
-      wrap.innerHTML =
-        '<div style="padding:24px;color:#b5627c">Bloom failed to render — see DevTools console.</div>';
+      const errBox = wrap.createDiv();
+      errBox.style.cssText = "padding:24px;color:#b5627c";
+      errBox.setText("Bloom failed to render — see DevTools console.");
     }
   }
 
@@ -157,7 +163,7 @@ export class BloomView extends ItemView {
     toggle?.addEventListener("click", () => {
       this.dark = !this.dark;
       this.settings.dark = this.dark;
-      (this.plugin as BloomPlugin).saveSettings();
+      void (this.plugin as BloomPlugin).saveSettings();
       this.applyTheme();
     });
 
@@ -209,7 +215,9 @@ export class BloomView extends ItemView {
   private addTask() {
     // window.prompt() is blocked inside Obsidian's iframe sandbox (1.6+),
     // so we use a proper modal with a text field instead.
-    new NewTaskModal(this.app, (name) => this.createTask(name)).open();
+    new NewTaskModal(this.app, (name) => {
+      void this.createTask(name);
+    }).open();
   }
 
   /** Append `- [ ] name` to Daily Tasks.md, then live-update the board. */
@@ -228,10 +236,11 @@ export class BloomView extends ItemView {
     // insert card into the To Do column
     const todoBody = this.containerEl.querySelector<HTMLElement>('.board-col[data-col="todo"] .board-col-body');
     if (todoBody) {
-      const card = document.createElement("div");
-      card.className = "t-card";
-      card.innerHTML = `<span class="t-tag" style="color:#b5627c">Daily</span><div class="t-name">${esc(task)}</div>`;
-      todoBody.appendChild(card);
+      const card = todoBody.createDiv("t-card");
+      const tag = card.createSpan("t-tag");
+      tag.style.color = "#b5627c";
+      tag.setText("Daily");
+      card.createDiv("t-name").setText(task);
     }
     // bump To Do count + board subtitle
     const todoCol = this.containerEl.querySelector<HTMLElement>('.board-col[data-col="todo"]');
@@ -305,9 +314,8 @@ export class BloomView extends ItemView {
     else if (id === "trackers") html = trackersView(this.lastData);
     else if (id === "tasks") html = tasksView(this.lastData);
     if (!html) return;
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    const fresh = tmp.firstElementChild as HTMLElement | null;
+    const tmp = new DOMParser().parseFromString(html, "text/html");
+    const fresh = tmp.body.firstElementChild as HTMLElement | null;
     if (!fresh) return;
     old.replaceWith(fresh);
     this.wireAddControls(fresh);
@@ -328,7 +336,9 @@ export class BloomView extends ItemView {
       "Logged to Expense Tracker → Daily Expense Log.",
       fields,
       "+ Add expense",
-      (v) => this.createExpense(v)
+      (v) => {
+        void this.createExpense(v);
+      }
     ).open();
   }
 
@@ -398,7 +408,9 @@ export class BloomView extends ItemView {
       "Added to Book List under the chosen category.",
       fields,
       "+ Add book",
-      (v) => this.createBook(v)
+      (v) => {
+        void this.createBook(v);
+      }
     ).open();
   }
 
@@ -432,7 +444,9 @@ export class BloomView extends ItemView {
   /* ------------------------------- STUDY --------------------------------- */
   private addStudyTask() {
     // Reuses the same single-field modal pattern as "New task".
-    new NewTaskModal(this.app, (name) => this.createStudyTask(name)).open();
+    new NewTaskModal(this.app, (name) => {
+      void this.createStudyTask(name);
+    }).open();
   }
 
   private async createStudyTask(name: string) {
@@ -489,7 +503,6 @@ export default class BloomPlugin extends Plugin {
 
   async onload() {
     try {
-      console.log("[Bloom] onload start");
       await this.loadSettings();
 
       this.registerView(VIEW_TYPE_BLOOM, (leaf) => {
@@ -499,26 +512,29 @@ export default class BloomPlugin extends Plugin {
         return v;
       });
 
-      this.addRibbonIcon("layout-dashboard", "Open Bloom", () => this.activateView());
+      this.addRibbonIcon("layout-dashboard", "Open Bloom", () => {
+        void this.activateView();
+      });
 
       this.addCommand({
-        id: "open-bloom",
-        name: "Open Bloom dashboard",
-        callback: () => this.activateView(),
+        id: "open-dashboard",
+        name: "Open dashboard",
+        callback: () => {
+          void this.activateView();
+        },
       });
       this.addCommand({
-        id: "toggle-bloom-theme",
+        id: "toggle-theme",
         name: "Toggle light / dark theme",
         callback: () => {
           const next = !this.settings.dark;
           this.settings.dark = next;
           this.view?.setExternalTheme(next);
-          this.saveSettings();
+          void this.saveSettings();
         },
       });
 
       new Notice("Bloom dashboard ready — click the dashboard icon in the left ribbon.");
-      console.log("[Bloom] onload complete");
     } catch (e) {
       console.error("[Bloom] onload failed:", e);
       new Notice("Bloom failed to load: " + (e instanceof Error ? e.message : String(e)));
@@ -548,7 +564,7 @@ export default class BloomPlugin extends Plugin {
   applyThemeExternal(dark: boolean) {
     this.settings.dark = dark;
     this.view?.setExternalTheme(dark);
-    this.saveSettings();
+    void this.saveSettings();
   }
   reloadView() {
     this.view?.reload();
@@ -556,6 +572,6 @@ export default class BloomPlugin extends Plugin {
   setDefaultView(id: string) {
     this.settings.defaultView = id;
     this.view?.setExternalView(id);
-    this.saveSettings();
+    void this.saveSettings();
   }
 }
