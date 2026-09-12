@@ -79,8 +79,7 @@ if (app) {
       const card = document.createElement("div");
       card.className = "t-card";
       const tag = document.createElement("span");
-      tag.className = "t-tag";
-      tag.style.color = "#b5627c";
+      tag.className = "t-tag t-tag-daily";
       tag.textContent = "Daily";
       const label = document.createElement("div");
       label.className = "t-name";

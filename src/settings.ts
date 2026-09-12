@@ -75,15 +75,15 @@ export class BloomSettingsModal extends Modal {
     /* ---- Data actions ---- */
     const dRow = wrap.createDiv({ cls: "bs-row" });
     dRow.createSpan({ text: "Data", cls: "bs-label" });
-    const refresh = dRow.createEl("button", { text: "↻ Refresh from vault", cls: "bs-btn" });
+    const refresh = dRow.createEl("button", { text: "↻ refresh from vault", cls: "bs-btn" });
     refresh.addEventListener("click", () => {
       this.plugin.reloadView();
       new Notice("Bloom: data refreshed");
     });
 
     /* ---- Data sources (read-only) ---- */
-    wrap.createEl("div", { text: "Reads from these vault files:", cls: "bs-note" });
-    const list = wrap.createEl("div", { cls: "bs-src" });
+    wrap.createDiv({ text: "Reads from these vault files:", cls: "bs-note" });
+    const list = wrap.createDiv({ cls: "bs-src" });
     DATA_SOURCES.forEach((p) => list.createEl("code", { text: p, cls: "bs-src-item" }));
 
     /* ---- Footer ---- */

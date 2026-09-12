@@ -51,14 +51,6 @@ const DEFAULT_SETTINGS: BloomSettings = { dark: false, defaultView: "home" };
 
 const TODO_FILE = "11-Todo/Daily Tasks.md";
 
-/** Minimal HTML escape for user-supplied task names. */
-const ESC_MAP: Record<string, string> = {
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-};
-function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ESC_MAP[c] ?? c);
-}
-
 export class BloomView extends ItemView {
   private currentView = "home";
   private dark = false;
@@ -87,6 +79,7 @@ export class BloomView extends ItemView {
     await this.render();
   }
   async onClose() {
+    await Promise.resolve();
     this.containerEl.empty();
   }
 
@@ -126,9 +119,8 @@ export class BloomView extends ItemView {
       if (content) content.classList.toggle("wide-content", this.currentView === "calendar");
     } catch (e) {
       console.error("[Bloom] render failed:", e);
-      const errBox = wrap.createDiv();
-      errBox.style.cssText = "padding:24px;color:#b5627c";
-      errBox.setText("Bloom failed to render — see DevTools console.");
+      const errBox = wrap.createDiv("bloom-render-error");
+      errBox.setText("Bloom failed to render — see devtools console.");
     }
   }
 
@@ -237,8 +229,7 @@ export class BloomView extends ItemView {
     const todoBody = this.containerEl.querySelector<HTMLElement>('.board-col[data-col="todo"] .board-col-body');
     if (todoBody) {
       const card = todoBody.createDiv("t-card");
-      const tag = card.createSpan("t-tag");
-      tag.style.color = "#b5627c";
+      const tag = card.createSpan("t-tag t-tag-daily");
       tag.setText("Daily");
       card.createDiv("t-name").setText(task);
     }
@@ -247,7 +238,7 @@ export class BloomView extends ItemView {
     const todoCount = todoCol?.querySelector(".board-col-body")?.children.length ?? 0;
     todoCol?.querySelector(".col-count")?.replaceChildren(document.createTextNode(String(todoCount)));
     this.refreshBoardSub();
-    new Notice("Bloom: task added to Daily Tasks");
+    new Notice("Bloom: task added to daily tasks");
   }
 
   /** Mark the home "today's #1" task complete: flip the visual + write back to source file. */
@@ -276,7 +267,7 @@ export class BloomView extends ItemView {
       new Notice(nextDone ? "Bloom: #1 marked done" : "Bloom: #1 reopened");
     } catch (e) {
       console.error("[Bloom] toggleTopTask write failed:", e);
-      new Notice("Bloom: could not save #1 state (Daily Note may not exist)");
+      new Notice("Bloom: could not save #1 state (daily note may not exist)");
     }
   }
 
@@ -512,7 +503,7 @@ export default class BloomPlugin extends Plugin {
         return v;
       });
 
-      this.addRibbonIcon("layout-dashboard", "Open Bloom", () => {
+      this.addRibbonIcon("layout-dashboard", "Open dashboard", () => {
         void this.activateView();
       });
 
@@ -551,7 +542,7 @@ export default class BloomPlugin extends Plugin {
       leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(true);
       await leaf.setViewState({ type: VIEW_TYPE_BLOOM, active: true });
     }
-    workspace.revealLeaf(leaf);
+    void workspace.revealLeaf(leaf);
   }
 
   async loadSettings() {

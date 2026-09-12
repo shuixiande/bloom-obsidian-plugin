@@ -40,7 +40,7 @@ export class EntryModal extends Modal {
 
     wrap.createEl("h3", { text: this.titleText, cls: "bs-title" });
     if (this.noteText) {
-      wrap.createEl("div", { text: this.noteText, cls: "bs-note" });
+      wrap.createDiv({ text: this.noteText, cls: "bs-note" });
     }
 
     let firstInput: TextComponent | null = null;
@@ -51,7 +51,9 @@ export class EntryModal extends Modal {
 
       if (f.type === "select") {
         const dd = new DropdownComponent(fieldBox);
-        (f.options ?? []).forEach((o) => dd.addOption(o.value, o.label));
+        for (const o of f.options ?? []) {
+          dd.addOption(o.value, o.label);
+        }
         if (f.defaultValue) dd.setValue(f.defaultValue);
         this.controls[f.key] = dd;
       } else {
@@ -84,7 +86,7 @@ export class EntryModal extends Modal {
     const values: Record<string, string> = {};
     for (const f of this.fields) {
       const c = this.controls[f.key];
-      if (!c) continue;
+      if (c === undefined) continue;
       values[f.key] = (c.getValue?.() ?? "").toString().trim();
     }
     this.submitted = true;

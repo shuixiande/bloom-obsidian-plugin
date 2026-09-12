@@ -24,15 +24,15 @@ export class NewTaskModal extends Modal {
     const wrap = contentEl.createDiv({ cls: "bloom bloom-settings bloom-task-modal" });
 
     wrap.createEl("h3", { text: "New task", cls: "bs-title" });
-    wrap.createEl("div", {
-      text: "The task will be added to your Daily Tasks list.",
+    wrap.createDiv({
+      text: "The task will be added to your daily tasks list.",
       cls: "bs-note",
     });
 
     const row = wrap.createDiv({ cls: "bs-row" });
     row.createSpan({ text: "Task name", cls: "bs-label" });
     this.input = new TextComponent(row)
-      .setPlaceholder("e.g. Water the plants")
+      .setPlaceholder("E.g. Water the plants")
       .setValue("")
       .onChange(() => {
         // keep Enter-to-submit logic simple: nothing here
@@ -52,7 +52,7 @@ export class NewTaskModal extends Modal {
     const foot = wrap.createDiv({ cls: "bs-row bs-foot" });
     const cancel = foot.createEl("button", { text: "Cancel", cls: "bs-btn" });
     cancel.addEventListener("click", () => this.close());
-    const add = foot.createEl("button", { text: "+ Add task", cls: "bs-btn bs-primary" });
+    const add = foot.createEl("button", { text: "+ add task", cls: "bs-btn bs-primary" });
     add.addEventListener("click", () => this.submit());
   }
 

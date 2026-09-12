@@ -9,7 +9,6 @@
    prototype.js.
    ========================================================================= */
 import { App } from "obsidian";
-// @ts-ignore — lunar-typescript ships its own d.ts but esbuild is strict
 import { Solar, HolidayUtil } from "lunar-typescript";
 import { loadBloomData } from "./data";
 import type {

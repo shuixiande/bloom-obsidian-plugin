@@ -12539,13 +12539,13 @@ var BloomSettingsModal = class extends import_obsidian.Modal {
     });
     const dRow = wrap.createDiv({ cls: "bs-row" });
     dRow.createSpan({ text: "Data", cls: "bs-label" });
-    const refresh = dRow.createEl("button", { text: "\u21BB Refresh from vault", cls: "bs-btn" });
+    const refresh = dRow.createEl("button", { text: "\u21BB refresh from vault", cls: "bs-btn" });
     refresh.addEventListener("click", () => {
       this.plugin.reloadView();
       new import_obsidian.Notice("Bloom: data refreshed");
     });
-    wrap.createEl("div", { text: "Reads from these vault files:", cls: "bs-note" });
-    const list = wrap.createEl("div", { cls: "bs-src" });
+    wrap.createDiv({ text: "Reads from these vault files:", cls: "bs-note" });
+    const list = wrap.createDiv({ cls: "bs-src" });
     DATA_SOURCES.forEach((p) => list.createEl("code", { text: p, cls: "bs-src-item" }));
     const foot = wrap.createDiv({ cls: "bs-row bs-foot" });
     const done = foot.createEl("button", { text: "Done", cls: "bs-btn bs-primary" });
@@ -12570,13 +12570,13 @@ var NewTaskModal = class extends import_obsidian2.Modal {
     contentEl.empty();
     const wrap = contentEl.createDiv({ cls: "bloom bloom-settings bloom-task-modal" });
     wrap.createEl("h3", { text: "New task", cls: "bs-title" });
-    wrap.createEl("div", {
-      text: "The task will be added to your Daily Tasks list.",
+    wrap.createDiv({
+      text: "The task will be added to your daily tasks list.",
       cls: "bs-note"
     });
     const row = wrap.createDiv({ cls: "bs-row" });
     row.createSpan({ text: "Task name", cls: "bs-label" });
-    this.input = new import_obsidian2.TextComponent(row).setPlaceholder("e.g. Water the plants").setValue("").onChange(() => {
+    this.input = new import_obsidian2.TextComponent(row).setPlaceholder("E.g. Water the plants").setValue("").onChange(() => {
     });
     this.input.inputEl.addClass("bs-input");
     this.input.inputEl.addEventListener("keydown", (e) => {
@@ -12591,7 +12591,7 @@ var NewTaskModal = class extends import_obsidian2.Modal {
     const foot = wrap.createDiv({ cls: "bs-row bs-foot" });
     const cancel = foot.createEl("button", { text: "Cancel", cls: "bs-btn" });
     cancel.addEventListener("click", () => this.close());
-    const add = foot.createEl("button", { text: "+ Add task", cls: "bs-btn bs-primary" });
+    const add = foot.createEl("button", { text: "+ add task", cls: "bs-btn bs-primary" });
     add.addEventListener("click", () => this.submit());
   }
   submit() {
@@ -12631,7 +12631,7 @@ var EntryModal = class extends import_obsidian3.Modal {
     const wrap = contentEl.createDiv({ cls: "bloom bloom-settings bloom-entry-modal" });
     wrap.createEl("h3", { text: this.titleText, cls: "bs-title" });
     if (this.noteText) {
-      wrap.createEl("div", { text: this.noteText, cls: "bs-note" });
+      wrap.createDiv({ text: this.noteText, cls: "bs-note" });
     }
     let firstInput = null;
     for (const f of this.fields) {
@@ -12640,7 +12640,9 @@ var EntryModal = class extends import_obsidian3.Modal {
       const fieldBox = row.createDiv({ cls: "bs-field" });
       if (f.type === "select") {
         const dd = new import_obsidian3.DropdownComponent(fieldBox);
-        ((_a = f.options) != null ? _a : []).forEach((o) => dd.addOption(o.value, o.label));
+        for (const o of (_a = f.options) != null ? _a : []) {
+          dd.addOption(o.value, o.label);
+        }
         if (f.defaultValue)
           dd.setValue(f.defaultValue);
         this.controls[f.key] = dd;
@@ -12672,7 +12674,7 @@ var EntryModal = class extends import_obsidian3.Modal {
     const values = {};
     for (const f of this.fields) {
       const c = this.controls[f.key];
-      if (!c)
+      if (c === void 0)
         continue;
       values[f.key] = ((_b = (_a = c.getValue) == null ? void 0 : _a.call(c)) != null ? _b : "").toString().trim();
     }
@@ -12724,6 +12726,7 @@ var BloomView = class extends import_obsidian4.ItemView {
     await this.render();
   }
   async onClose() {
+    await Promise.resolve();
     this.containerEl.empty();
   }
   setExternalView(id) {
@@ -12759,9 +12762,8 @@ var BloomView = class extends import_obsidian4.ItemView {
         content.classList.toggle("wide-content", this.currentView === "calendar");
     } catch (e) {
       console.error("[Bloom] render failed:", e);
-      const errBox = wrap.createDiv();
-      errBox.style.cssText = "padding:24px;color:#b5627c";
-      errBox.setText("Bloom failed to render \u2014 see DevTools console.");
+      const errBox = wrap.createDiv("bloom-render-error");
+      errBox.setText("Bloom failed to render \u2014 see devtools console.");
     }
   }
   applyTheme() {
@@ -12855,8 +12857,7 @@ var BloomView = class extends import_obsidian4.ItemView {
     const todoBody = this.containerEl.querySelector('.board-col[data-col="todo"] .board-col-body');
     if (todoBody) {
       const card = todoBody.createDiv("t-card");
-      const tag = card.createSpan("t-tag");
-      tag.style.color = "#b5627c";
+      const tag = card.createSpan("t-tag t-tag-daily");
       tag.setText("Daily");
       card.createDiv("t-name").setText(task);
     }
@@ -12864,7 +12865,7 @@ var BloomView = class extends import_obsidian4.ItemView {
     const todoCount = (_b = (_a = todoCol == null ? void 0 : todoCol.querySelector(".board-col-body")) == null ? void 0 : _a.children.length) != null ? _b : 0;
     (_c = todoCol == null ? void 0 : todoCol.querySelector(".col-count")) == null ? void 0 : _c.replaceChildren(document.createTextNode(String(todoCount)));
     this.refreshBoardSub();
-    new import_obsidian4.Notice("Bloom: task added to Daily Tasks");
+    new import_obsidian4.Notice("Bloom: task added to daily tasks");
   }
   /** Mark the home "today's #1" task complete: flip the visual + write back to source file. */
   async toggleTopTask() {
@@ -12894,7 +12895,7 @@ var BloomView = class extends import_obsidian4.ItemView {
       new import_obsidian4.Notice(nextDone ? "Bloom: #1 marked done" : "Bloom: #1 reopened");
     } catch (e) {
       console.error("[Bloom] toggleTopTask write failed:", e);
-      new import_obsidian4.Notice("Bloom: could not save #1 state (Daily Note may not exist)");
+      new import_obsidian4.Notice("Bloom: could not save #1 state (daily note may not exist)");
     }
   }
   refreshBoardSub() {
@@ -13139,7 +13140,7 @@ var BloomPlugin = class extends import_obsidian4.Plugin {
         this.view = v;
         return v;
       });
-      this.addRibbonIcon("layout-dashboard", "Open Bloom", () => {
+      this.addRibbonIcon("layout-dashboard", "Open dashboard", () => {
         void this.activateView();
       });
       this.addCommand({
@@ -13177,7 +13178,7 @@ var BloomPlugin = class extends import_obsidian4.Plugin {
       leaf = (_a = workspace.getRightLeaf(false)) != null ? _a : workspace.getLeaf(true);
       await leaf.setViewState({ type: VIEW_TYPE_BLOOM, active: true });
     }
-    workspace.revealLeaf(leaf);
+    void workspace.revealLeaf(leaf);
   }
   async loadSettings() {
     this.settings = Object.assign(

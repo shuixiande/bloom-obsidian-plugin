@@ -314,6 +314,12 @@
 }
 .btn-primary:hover { filter: brightness(0.96); }
 
+/* Inline render-failure notice (main.ts catch block). */
+.bloom-render-error { padding: 24px; color: #b5627c; }
+
+/* "Daily" tag color on task cards (avoids inline style assignment). */
+.t-tag-daily { color: #b5627c; }
+
 /* small inline "+ Add" button (e.g. expense card in Trackers) */
 .card-head-actions { display: flex; align-items: center; gap: 10px; }
 .btn-sm {

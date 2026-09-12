@@ -1,14 +1,17 @@
 {
   "name": "bloom",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Soft pastel Obsidian dashboard plugin",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production"
+    "build": "node esbuild.config.mjs production",
+    "lint": "eslint src/"
   },
   "devDependencies": {
     "esbuild": "^0.20.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-obsidianmd": "^0.4.2",
     "obsidian": "^1.4.0",
     "tslib": "^2.6.0",
     "typescript": "^5.4.0"
